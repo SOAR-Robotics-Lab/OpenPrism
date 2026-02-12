@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Generated media (runtime output, not committed)
+.opencode/plots/
+.opencode/generated-media/
+generated_imgs/
+
+# Bun
+bun.lockb
+
+# Debug
+*.log
+npm-debug.log*
+
+# Coverage
+coverage/

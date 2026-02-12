@@ -26,10 +26,12 @@ describe("createSystemPromptHook", () => {
     expect(joined).toContain("Tier 1: Mermaid Diagrams")
     expect(joined).toContain("render_mermaid")
     expect(joined).toContain("analyze_structure")
-    expect(joined).toContain("Tier 2: Matplotlib Data Visualization")
+    expect(joined).toContain("Tier 2a: Matplotlib Data Visualization (Static)")
     expect(joined).toContain("plot_data")
     expect(joined).toContain("Always use English for all text in plots")
     expect(joined).toContain("CJK")
+    expect(joined).toContain("Tier 2b: Plotly.js Interactive Charts")
+    expect(joined).toContain("plot_interactive")
     expect(joined).toContain("Tier 3: AIGC Image Generation")
     expect(joined).toContain("generate_image")
     expect(joined).toContain("Selection Guidelines")
@@ -289,7 +291,7 @@ describe("createInlineImageTextCompleteHook", () => {
   const DATA_URI = `data:image/png;base64,${PNG_BASE64}`
 
   function expectedHtml(alt: string, dataUri: string): string {
-    return `<a href="${dataUri}" target="_blank" rel="noopener"><img src="${dataUri}" alt="${alt}" style="max-width:100%;cursor:zoom-in" /></a>`
+    return `<a href="${dataUri}" class="external-link" target="_blank" rel="noopener noreferrer"><img src="${dataUri}" alt="${alt}" style="max-width:100%;cursor:zoom-in" /></a>`
   }
 
   beforeEach(async () => {
@@ -315,8 +317,9 @@ describe("createInlineImageTextCompleteHook", () => {
     expect(output.text).toBe(expectedHtml("plot", DATA_URI))
   })
 
-  it("does not convert image paths outside the plugin output directory", async () => {
-    const outsideImagePath = path.join(tempRoot, "outside.png")
+  it("does not convert image paths outside the project directory", async () => {
+    const outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), "openprism-outside-"))
+    const outsideImagePath = path.join(outsideDir, "outside.png")
     await fs.writeFile(outsideImagePath, PNG_BYTES)
 
     const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots")
@@ -325,6 +328,7 @@ describe("createInlineImageTextCompleteHook", () => {
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
     expect(output.text).toBe(`![plot](${outsideImagePath})`)
+    await fs.rm(outsideDir, { recursive: true, force: true })
   })
 
   it("converts web-root image links that point to outputDir", async () => {
@@ -445,5 +449,68 @@ describe("createInlineImageTextCompleteHook", () => {
 
     expect(output.text).toContain('alt="A&lt;B &amp; &quot;C&quot;"')
     expect(output.text).toContain(`src="${DATA_URI}"`)
+  })
+
+  it("emits a text-only link for images larger than 8 KB (no data URI in context)", async () => {
+    const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
+    await fs.mkdir(outputDir, { recursive: true })
+
+    const imagePath = path.join(outputDir, "large-plot.png")
+    const largeBuffer = Buffer.alloc(10 * 1024, 0x42)
+    await fs.writeFile(imagePath, largeBuffer)
+
+    const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots")
+    const output = { text: `![big chart](${imagePath})` }
+
+    await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
+
+    expect(output.text).not.toContain("data:image")
+    expect(output.text).not.toContain("<img")
+    expect(output.text).toContain("🖼 big chart")
+    expect(output.text).toContain(imagePath)
+  })
+
+  it("uses viewer URL for large images when mediaServer is available", async () => {
+    const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
+    await fs.mkdir(outputDir, { recursive: true })
+
+    const imagePath = path.join(outputDir, "large-plot.png")
+    const largeBuffer = Buffer.alloc(10 * 1024, 0x42)
+    await fs.writeFile(imagePath, largeBuffer)
+
+    const fakeViewerUrl = "http://127.0.0.1:12345/view/fake-id"
+    const fakeMediaServer = {
+      ensureStarted: async () => {},
+      registerMedia: () => {},
+      viewUrl: () => fakeViewerUrl,
+    } as unknown as import("../src/utils/media-server.ts").MediaServer
+
+    const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots", {
+      mediaServer: fakeMediaServer,
+    })
+    const output = { text: `![big chart](${imagePath})` }
+
+    await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
+
+    expect(output.text).not.toContain("data:image")
+    expect(output.text).toContain("🖼 big chart")
+    expect(output.text).toContain(fakeViewerUrl)
+  })
+
+  it("still inlines images at exactly 8 KB", async () => {
+    const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
+    await fs.mkdir(outputDir, { recursive: true })
+
+    const imagePath = path.join(outputDir, "edge.png")
+    const edgeBuffer = Buffer.alloc(8 * 1024, 0x42)
+    await fs.writeFile(imagePath, edgeBuffer)
+
+    const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots")
+    const output = { text: `![edge case](${imagePath})` }
+
+    await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
+
+    expect(output.text).toContain("data:image/png;base64,")
+    expect(output.text).toContain("<img")
   })
 })

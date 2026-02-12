@@ -1,11 +1,14 @@
+import * as path from "node:path"
 import type { Plugin, ToolDefinition } from "@opencode-ai/plugin"
 import { FileManager } from "./utils/file-manager.js"
+import { MediaServer } from "./utils/media-server.js"
 import { DEFAULT_CONFIG } from "./types.js"
 import type { OpenPrismConfig } from "./types.js"
 
 import { createRenderMermaidTool } from "./tools/render-mermaid.js"
 import { createAnalyzeStructureTool } from "./tools/analyze-structure.js"
 import { createPlotDataTool } from "./tools/plot-data.js"
+import { createPlotInteractiveTool } from "./tools/plot-interactive.js"
 import { createGenerateImageTool } from "./tools/generate-image.js"
 
 import { createMermaidAfterHook } from "./hooks/mermaid-renderer.js"
@@ -17,6 +20,8 @@ export const OpenPrismPlugin: Plugin = async (ctx) => {
   const config: OpenPrismConfig = { ...DEFAULT_CONFIG }
   const fileManager = new FileManager(ctx.directory, config)
   const latestImageBySession = new Map<string, string>()
+  const projectRoot = path.resolve(ctx.directory)
+  const mediaServer = new MediaServer(projectRoot)
 
   await fileManager.ensureDir()
 
@@ -29,6 +34,10 @@ export const OpenPrismPlugin: Plugin = async (ctx) => {
 
   if (config.matplotlibEnabled) {
     tools["plot_data"] = createPlotDataTool(fileManager)
+  }
+
+  if (config.plotlyEnabled) {
+    tools["plot_interactive"] = createPlotInteractiveTool(fileManager, mediaServer)
   }
 
   if (config.aigcEnabled) {
@@ -48,6 +57,7 @@ export const OpenPrismPlugin: Plugin = async (ctx) => {
         latestImageBySession.delete(sessionID)
         return filePath
       },
+      mediaServer,
     }),
   }
 }

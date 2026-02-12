@@ -1,3 +1,13 @@
 {
-  "$schema": "https://opencode.ai/config.json"
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "nano-banana": {
+      "type": "local",
+      "command": ["npx", "-y", "-p", "@dondonudonjp/nanobanana-mcp-server", "nanobanana-mcp"],
+      "enabled": true,
+      "environment": {
+        "GEMINI_API_KEY": "{env:GEMINI_API_KEY}"
+      }
+    }
+  }
 }

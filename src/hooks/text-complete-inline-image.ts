@@ -1,10 +1,14 @@
+import { randomUUID } from "node:crypto"
 import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import type { Hooks } from "@opencode-ai/plugin"
+import type { MediaServer } from "../utils/media-server.js"
 
 const SUPPORTED_IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"])
 
 const MARKDOWN_IMAGE_REGEX = /!\[([^\]]*)\]\(([^)\s]+)\)/g
+
+const VIEWER_URL_REGEX = /ViewerURL:\s*(http:\/\/127\.0\.0\.1:\d+\/view\/[^\s]+)/g
 
 const MIME_BY_EXT: Record<string, string> = {
   ".png": "image/png",
@@ -15,18 +19,21 @@ const MIME_BY_EXT: Record<string, string> = {
   ".svg": "image/svg+xml",
 }
 
+const MAX_INLINE_BYTES = 8 * 1024
+
+const PLOTLY_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="48" height="48"><rect width="64" height="64" rx="8" fill="#1f2937"/><rect x="12" y="38" width="8" height="16" rx="2" fill="#3b82f6"/><rect x="24" y="26" width="8" height="28" rx="2" fill="#10b981"/><rect x="36" y="32" width="8" height="22" rx="2" fill="#f59e0b"/><rect x="48" y="20" width="8" height="34" rx="2" fill="#ef4444"/><line x1="8" y1="56" x2="60" y2="56" stroke="#6b7280" stroke-width="2"/></svg>`
+
 type TextCompleteOptions = {
   consumeLatestImagePath?: (sessionID: string) => string | undefined
+  mediaServer?: MediaServer
 }
 
 export function createInlineImageTextCompleteHook(
   projectDir: string,
-  outputDir: string,
+  _outputDir: string,
   options?: TextCompleteOptions,
 ): NonNullable<Hooks["experimental.text.complete"]> {
-  const normalizedOutputDir = normalizeOutputDir(outputDir)
   const resolvedProjectDir = path.resolve(projectDir)
-  const allowedRoot = path.resolve(projectDir, outputDir)
 
   return async (input, output) => {
     const textWithFallback = maybeAppendFallbackImageMarkdown(
@@ -37,9 +44,9 @@ export function createInlineImageTextCompleteHook(
 
     output.text = await inlineLocalImageMarkdown(
       textWithFallback,
-      allowedRoot,
       resolvedProjectDir,
-      normalizedOutputDir,
+      options?.mediaServer,
+      resolvedProjectDir,
     )
   }
 }
@@ -47,19 +54,21 @@ export function createInlineImageTextCompleteHook(
 export async function inlineLocalImageMarkdown(
   text: string,
   allowedRoot: string,
+  mediaServer?: MediaServer,
   projectDir?: string,
-  normalizedOutputDir?: string,
 ): Promise<string> {
-  if (!text.includes("![")) {
-    return text
-  }
-
-  const matches = Array.from(text.matchAll(MARKDOWN_IMAGE_REGEX))
-  if (matches.length === 0) {
-    return text
-  }
-
   let transformed = text
+
+  transformed = replaceViewerUrls(transformed)
+
+  if (!transformed.includes("![")) {
+    return transformed
+  }
+
+  const matches = Array.from(transformed.matchAll(MARKDOWN_IMAGE_REGEX))
+  if (matches.length === 0) {
+    return transformed
+  }
 
   for (const match of matches) {
     const fullMatch = match[0]
@@ -73,37 +82,83 @@ export async function inlineLocalImageMarkdown(
       continue
     }
 
-    const resolvedPath = resolveSourcePath(source, projectDir, normalizedOutputDir)
+    const candidates = resolveSourcePaths(source, projectDir)
+    if (candidates.length === 0) {
+      continue
+    }
+
+    let resolvedPath: string | undefined
+    for (const candidate of candidates) {
+      if (!isUnderAllowedRoot(candidate, allowedRoot)) {
+        continue
+      }
+      const ext = path.extname(candidate).toLowerCase()
+      if (!SUPPORTED_IMAGE_EXTENSIONS.has(ext)) {
+        continue
+      }
+      const exists = await fileExists(candidate)
+      if (exists) {
+        resolvedPath = candidate
+        break
+      }
+    }
+
     if (!resolvedPath) {
       continue
     }
 
-    if (!isUnderAllowedRoot(resolvedPath, allowedRoot)) {
-      continue
-    }
-
     const ext = path.extname(resolvedPath).toLowerCase()
-    if (!SUPPORTED_IMAGE_EXTENSIONS.has(ext)) {
-      continue
-    }
+    const mime = MIME_BY_EXT[ext] ?? "image/png"
+    const viewerUrl = await registerImageWithServer(mediaServer, resolvedPath, alt, mime)
+    const dataUri = await fileToDataUri(resolvedPath, MAX_INLINE_BYTES)
 
-    const dataUri = await fileToDataUri(resolvedPath)
-    if (!dataUri) {
-      continue
+    let replacement: string
+    if (dataUri) {
+      const linkHref = viewerUrl ?? dataUri
+      replacement = `<a href="${linkHref}" class="external-link" target="_blank" rel="noopener noreferrer"><img src="${dataUri}" alt="${escapeHtmlAttr(alt)}" style="max-width:100%;cursor:zoom-in" /></a>`
+    } else if (viewerUrl) {
+      replacement = `[🖼 ${alt || "View image"}](${viewerUrl})`
+    } else {
+      replacement = `[🖼 ${alt || "View image"}](${source})`
     }
-
-    const htmlImg = `<a href="${dataUri}" target="_blank" rel="noopener"><img src="${dataUri}" alt="${escapeHtmlAttr(alt)}" style="max-width:100%;cursor:zoom-in" /></a>`
-    transformed = transformed.replace(fullMatch, htmlImg)
+    transformed = transformed.replace(fullMatch, replacement)
   }
 
   return transformed
+}
+
+function replaceViewerUrls(text: string): string {
+  return text.replace(VIEWER_URL_REGEX, (_fullMatch, url: string) => {
+    const iconDataUri = `data:image/svg+xml;base64,${Buffer.from(PLOTLY_ICON_SVG).toString("base64")}`
+    return `<a href="${escapeHtmlAttr(url)}" class="external-link" target="_blank" rel="noopener noreferrer" title="Open interactive chart"><img src="${iconDataUri}" alt="Interactive chart" style="vertical-align:middle;margin-right:4px" /></a> [Open Interactive Chart](${url})`
+  })
+}
+
+async function registerImageWithServer(
+  mediaServer: MediaServer | undefined,
+  filePath: string,
+  description: string,
+  mimeType: string,
+): Promise<string | undefined> {
+  if (!mediaServer) {
+    return undefined
+  }
+
+  try {
+    await mediaServer.ensureStarted()
+    const id = randomUUID()
+    mediaServer.registerMedia({ id, kind: "image", filePath, mimeType, description })
+    return mediaServer.viewUrl(id)
+  } catch {
+    return undefined
+  }
 }
 
 function escapeHtmlAttr(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 }
 
-async function fileToDataUri(filePath: string): Promise<string | undefined> {
+async function fileToDataUri(filePath: string, maxBytes: number): Promise<string | undefined> {
   const ext = path.extname(filePath).toLowerCase()
   const mime = MIME_BY_EXT[ext]
   if (!mime) {
@@ -111,11 +166,24 @@ async function fileToDataUri(filePath: string): Promise<string | undefined> {
   }
 
   try {
+    const stat = await fs.stat(filePath)
+    if (stat.size > maxBytes) {
+      return
+    }
     const data = await fs.readFile(filePath)
     const base64 = data.toString("base64")
     return `data:${mime};base64,${base64}`
   } catch {
     return
+  }
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath)
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -148,37 +216,25 @@ function maybeAppendFallbackImageMarkdown(
   return `${text}${suffix}`
 }
 
-function resolveSourcePath(
+function resolveSourcePaths(
   source: string,
   projectDir?: string,
-  normalizedOutputDir?: string,
-): string | undefined {
+): string[] {
   const token = normalizePathToken(source)
+  const candidates: string[] = []
 
-  if (projectDir && normalizedOutputDir) {
-    const webPrefix = `/${normalizedOutputDir}`
-    const relativePrefix = normalizedOutputDir
-    const dotRelativePrefix = `./${normalizedOutputDir}`
-    if (token === webPrefix || token.startsWith(`${webPrefix}/`)) {
-      return path.resolve(projectDir, token.slice(1))
-    }
-    if (token === relativePrefix || token.startsWith(`${relativePrefix}/`)) {
-      return path.resolve(projectDir, token)
-    }
-    if (token === dotRelativePrefix || token.startsWith(`${dotRelativePrefix}/`)) {
-      return path.resolve(projectDir, token.slice(2))
+  if (projectDir) {
+    const stripped = token.startsWith("./") ? token.slice(2) : token.startsWith("/") ? token.slice(1) : token
+    if (stripped) {
+      candidates.push(path.resolve(projectDir, stripped))
     }
   }
 
   if (path.isAbsolute(token)) {
-    return path.resolve(token)
+    candidates.push(path.resolve(token))
   }
 
-  return
-}
-
-function normalizeOutputDir(outputDir: string): string {
-  return outputDir.replaceAll("\\", "/").replace(/^\.\//, "").replace(/^\//, "").replace(/\/$/, "")
+  return candidates
 }
 
 function isUnderAllowedRoot(filePath: string, allowedRoot: string): boolean {

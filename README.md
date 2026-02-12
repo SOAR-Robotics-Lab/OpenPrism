@@ -1,5 +1,6 @@
 # OpenPrism
 
+![](./docs/logo.png)
 **Multi-tier drawing plugin for the OpenCode ecosystem** — bringing Mermaid diagrams, Matplotlib visualizations, and AIGC image generation to your AI coding agent.
 
 OpenPrism extends [OpenCode](https://opencode.ai) with three tiers of visual capabilities, enabling your AI assistant to think, compute, and create visually.

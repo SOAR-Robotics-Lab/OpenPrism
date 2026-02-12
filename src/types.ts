@@ -19,6 +19,23 @@ export const TIER_NAMES: Record<DrawingTier, string> = {
 }
 
 // ---------------------------------------------------------------------------
+// Media types (for MediaViewer)
+// ---------------------------------------------------------------------------
+
+/** Kind of media item for the viewer system. */
+export type MediaKind = "image" | "video" | "plotly"
+
+/** Additional metadata for specific media kinds. */
+export interface MediaMetadata {
+  /** Original width in pixels (images/video). */
+  width?: number
+  /** Original height in pixels (images/video). */
+  height?: number
+  /** Plotly JSON spec — the complete figure definition. */
+  plotlySpec?: unknown
+}
+
+// ---------------------------------------------------------------------------
 // Mermaid (Tier 1)
 // ---------------------------------------------------------------------------
 
@@ -149,6 +166,10 @@ export interface AssetRecord {
   size: number
   /** MIME type of the output. */
   mimeType: string
+  /** Media kind for the viewer system. */
+  kind?: MediaKind
+  /** Type-specific metadata (dimensions, plotly spec, etc.). */
+  media?: MediaMetadata
 }
 
 /** Summary of all assets in the current session, used for compaction. */
@@ -174,6 +195,8 @@ export interface OpenPrismConfig {
   mermaidEnabled: boolean
   /** Whether Tier 2 (Matplotlib) is enabled. Defaults to true. */
   matplotlibEnabled: boolean
+  /** Whether Plotly.js interactive charts are enabled. Defaults to true. */
+  plotlyEnabled: boolean
   /** Whether Tier 3 (AIGC) is enabled. Defaults to true. */
   aigcEnabled: boolean
   /** Maximum directory size in MB before auto-cleanup triggers. Defaults to 500. */
@@ -187,6 +210,7 @@ export const DEFAULT_CONFIG: OpenPrismConfig = {
   outputDir: ".opencode/plots",
   mermaidEnabled: true,
   matplotlibEnabled: true,
+  plotlyEnabled: true,
   aigcEnabled: true,
   maxOutputSizeMB: 500,
   cleanupAfterDays: 30,

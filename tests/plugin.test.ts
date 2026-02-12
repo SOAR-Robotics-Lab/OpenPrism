@@ -26,7 +26,7 @@ describe("OpenPrismPlugin", () => {
     }
   }
 
-  it("returns all 4 tools with default config", async () => {
+  it("returns all 5 tools with default config", async () => {
     const result = await OpenPrismPlugin(makePluginInput(tempRoot))
 
     expect(result.tool).toBeDefined()
@@ -34,8 +34,9 @@ describe("OpenPrismPlugin", () => {
     expect(toolNames).toContain("render_mermaid")
     expect(toolNames).toContain("analyze_structure")
     expect(toolNames).toContain("plot_data")
+    expect(toolNames).toContain("plot_interactive")
     expect(toolNames).toContain("generate_image")
-    expect(toolNames).toHaveLength(4)
+    expect(toolNames).toHaveLength(5)
   })
 
   it("returns all 3 lifecycle hooks", async () => {

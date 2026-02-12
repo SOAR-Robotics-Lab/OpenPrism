@@ -4,8 +4,21 @@ import type { FileManager } from "../utils/file-manager.js"
 
 export function createMermaidAfterHook(
   fileManager: FileManager,
+  onImageProduced?: (sessionID: string, filePath: string) => void,
 ): NonNullable<Hooks["tool.execute.after"]> {
-  return async (_input, output) => {
+  return async (input, output) => {
+    if (input.tool === "plot_data" || input.tool === "render_mermaid") {
+      const toolFilePath = extractToolFilePath(output.output)
+      if (toolFilePath) {
+        output.metadata = {
+          ...(output.metadata as Record<string, unknown> | undefined),
+          filePath: toolFilePath,
+          filepath: toolFilePath,
+        }
+        onImageProduced?.(input.sessionID, toolFilePath)
+      }
+    }
+
     const blocks = extractMermaidBlocks(output.output)
     if (blocks.length === 0) return
 
@@ -47,7 +60,17 @@ export function createMermaidAfterHook(
       output.metadata = {
         ...(output.metadata as Record<string, unknown> | undefined),
         filePath: lastRenderedPath,
+        filepath: lastRenderedPath,
       }
+      onImageProduced?.(input.sessionID, lastRenderedPath)
     }
   }
+}
+
+function extractToolFilePath(output: string): string | undefined {
+  const match = output.match(/^File:\s*(.+)$/m)
+  if (!match?.[1]) {
+    return
+  }
+  return match[1].trim()
 }

@@ -11,10 +11,12 @@ import { createGenerateImageTool } from "./tools/generate-image.js"
 import { createMermaidAfterHook } from "./hooks/mermaid-renderer.js"
 import { createSystemPromptHook } from "./hooks/system-prompt.js"
 import { createSessionCompactionHook } from "./hooks/session-compaction.js"
+import { createInlineImageTextCompleteHook } from "./hooks/text-complete-inline-image.js"
 
 export const OpenPrismPlugin: Plugin = async (ctx) => {
   const config: OpenPrismConfig = { ...DEFAULT_CONFIG }
   const fileManager = new FileManager(ctx.directory, config)
+  const latestImageBySession = new Map<string, string>()
 
   await fileManager.ensureDir()
 
@@ -35,9 +37,18 @@ export const OpenPrismPlugin: Plugin = async (ctx) => {
 
   return {
     tool: tools,
-    "tool.execute.after": createMermaidAfterHook(fileManager),
+    "tool.execute.after": createMermaidAfterHook(fileManager, (sessionID, filePath) => {
+      latestImageBySession.set(sessionID, filePath)
+    }),
     "experimental.chat.system.transform": createSystemPromptHook(config),
     "experimental.session.compacting": createSessionCompactionHook(fileManager),
+    "experimental.text.complete": createInlineImageTextCompleteHook(ctx.directory, config.outputDir, {
+      consumeLatestImagePath: (sessionID) => {
+        const filePath = latestImageBySession.get(sessionID)
+        latestImageBySession.delete(sessionID)
+        return filePath
+      },
+    }),
   }
 }
 

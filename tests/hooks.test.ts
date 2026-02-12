@@ -7,6 +7,10 @@ import { FileManager } from "../src/utils/file-manager.ts"
 import { createSystemPromptHook } from "../src/hooks/system-prompt.ts"
 import { createSessionCompactionHook } from "../src/hooks/session-compaction.ts"
 import { createMermaidAfterHook } from "../src/hooks/mermaid-renderer.ts"
+import {
+  createInlineImageTextCompleteHook,
+  inlineLocalImageMarkdown,
+} from "../src/hooks/text-complete-inline-image.ts"
 
 // ---------------------------------------------------------------------------
 // createSystemPromptHook
@@ -209,6 +213,28 @@ describe("createMermaidAfterHook", () => {
     expect(output.output).toContain("[OpenPrism] Skipped invalid Mermaid block")
   })
 
+  it("sets metadata file path for plot_data tool output", async () => {
+    const fileManager = new FileManager(tempRoot)
+    await fileManager.ensureDir()
+    let capturedPath: string | undefined
+    const hook = createMermaidAfterHook(fileManager, (_sessionID, filePath) => {
+      capturedPath = filePath
+    })
+
+    const output = {
+      title: "test",
+      output:
+        "Matplotlib plot generated successfully.\nFile: /tmp/example-plot.png\nFormat: png | Size: 12345 bytes",
+      metadata: {} as Record<string, unknown>,
+    }
+
+    await hook({ tool: "plot_data", sessionID: "s1", callID: "c1" }, output)
+
+    expect(output.metadata.filePath).toBe("/tmp/example-plot.png")
+    expect(output.metadata.filepath).toBe("/tmp/example-plot.png")
+    expect(capturedPath).toBe("/tmp/example-plot.png")
+  })
+
   it("renders valid mermaid blocks and appends result path", async () => {
     const fileManager = new FileManager(tempRoot)
     await fileManager.ensureDir()
@@ -233,6 +259,7 @@ describe("createMermaidAfterHook", () => {
     // Verify metadata includes filePath for web UI display
     const meta = output.metadata as Record<string, unknown>
     expect(meta.filePath).toBeDefined()
+    expect(meta.filepath).toBeDefined()
     expect(typeof meta.filePath).toBe("string")
     expect(meta.filePath as string).toContain(".svg")
   })
@@ -250,5 +277,151 @@ describe("createMermaidAfterHook", () => {
     await hook({ tool: "bash", sessionID: "s1", callID: "c1" }, output)
 
     expect(output.metadata.filePath).toBeUndefined()
+  })
+})
+
+describe("createInlineImageTextCompleteHook", () => {
+  let tempRoot: string
+  const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47])
+  const PNG_BASE64 = PNG_BYTES.toString("base64")
+
+  beforeEach(async () => {
+    tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "openprism-hooks-text-complete-"))
+  })
+
+  afterEach(async () => {
+    await fs.rm(tempRoot, { recursive: true, force: true })
+  })
+
+  it("converts absolute image paths under outputDir to data URIs", async () => {
+    const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
+    await fs.mkdir(outputDir, { recursive: true })
+
+    const imagePath = path.join(outputDir, "plot.png")
+    await fs.writeFile(imagePath, PNG_BYTES)
+
+    const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots")
+    const output = { text: `![plot](${imagePath})` }
+
+    await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
+
+    expect(output.text).toBe(`![plot](data:image/png;base64,${PNG_BASE64})`)
+  })
+
+  it("does not convert image paths outside the plugin output directory", async () => {
+    const outsideImagePath = path.join(tempRoot, "outside.png")
+    await fs.writeFile(outsideImagePath, PNG_BYTES)
+
+    const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots")
+    const output = { text: `![plot](${outsideImagePath})` }
+
+    await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
+
+    expect(output.text).toBe(`![plot](${outsideImagePath})`)
+  })
+
+  it("converts web-root image links that point to outputDir", async () => {
+    const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
+    await fs.mkdir(outputDir, { recursive: true })
+
+    const imagePath = path.join(outputDir, "plot.png")
+    await fs.writeFile(imagePath, PNG_BYTES)
+
+    const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots")
+    const output = { text: "![plot](/.opencode/plots/matplotlib/plot.png)" }
+
+    await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
+
+    expect(output.text).toBe(`![plot](data:image/png;base64,${PNG_BASE64})`)
+  })
+
+  it("converts relative image links that point to outputDir", async () => {
+    const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
+    await fs.mkdir(outputDir, { recursive: true })
+
+    const imagePath = path.join(outputDir, "plot.png")
+    await fs.writeFile(imagePath, PNG_BYTES)
+
+    const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots")
+    const output = { text: "![plot](.opencode/plots/matplotlib/plot.png)" }
+
+    await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
+
+    expect(output.text).toBe(`![plot](data:image/png;base64,${PNG_BASE64})`)
+  })
+
+  it("leaves non-image extension links unchanged", async () => {
+    const allowedRoot = path.join(tempRoot, ".opencode", "plots")
+    await fs.mkdir(allowedRoot, { recursive: true })
+
+    const text = `![doc](${path.join(allowedRoot, "chart.txt")})`
+    const transformed = await inlineLocalImageMarkdown(text, allowedRoot)
+
+    expect(transformed).toBe(text)
+  })
+
+  it("appends latest tool image as data URI when assistant text has no image", async () => {
+    const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
+    await fs.mkdir(outputDir, { recursive: true })
+
+    const imagePath = path.join(outputDir, "plot.png")
+    await fs.writeFile(imagePath, PNG_BYTES)
+
+    const latestBySession = new Map<string, string>([["s1", imagePath]])
+    const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots", {
+      consumeLatestImagePath: (sessionID) => {
+        const value = latestBySession.get(sessionID)
+        latestBySession.delete(sessionID)
+        return value
+      },
+    })
+
+    const output = { text: "Plot created successfully." }
+    await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
+
+    expect(output.text).toContain(`![OpenPrism image](data:image/png;base64,${PNG_BASE64})`)
+  })
+
+  it("does not append fallback image when markdown image already exists", async () => {
+    const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
+    await fs.mkdir(outputDir, { recursive: true })
+
+    const firstImagePath = path.join(outputDir, "first.png")
+    const secondImagePath = path.join(outputDir, "second.png")
+    await fs.writeFile(firstImagePath, PNG_BYTES)
+    await fs.writeFile(secondImagePath, PNG_BYTES)
+
+    const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots", {
+      consumeLatestImagePath: () => secondImagePath,
+    })
+
+    const output = { text: `![plot](${firstImagePath})` }
+    await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
+
+    expect(output.text).toContain(`![plot](data:image/png;base64,${PNG_BASE64})`)
+    expect(output.text).not.toContain("OpenPrism image")
+  })
+
+  it("skips images when file does not exist on disk", async () => {
+    const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
+    await fs.mkdir(outputDir, { recursive: true })
+
+    const missingPath = path.join(outputDir, "missing.png")
+    const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots")
+    const output = { text: `![plot](${missingPath})` }
+
+    await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
+
+    expect(output.text).toBe(`![plot](${missingPath})`)
+  })
+
+  it("leaves already-inlined data URIs unchanged", async () => {
+    const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots")
+    const dataUri = `data:image/png;base64,${PNG_BASE64}`
+    const output = { text: `![plot](${dataUri})` }
+
+    await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
+
+    expect(output.text).toBe(`![plot](${dataUri})`)
   })
 })

@@ -28,6 +28,8 @@ describe("createSystemPromptHook", () => {
     expect(joined).toContain("analyze_structure")
     expect(joined).toContain("Tier 2: Matplotlib Data Visualization")
     expect(joined).toContain("plot_data")
+    expect(joined).toContain("Always use English for all text in plots")
+    expect(joined).toContain("CJK")
     expect(joined).toContain("Tier 3: AIGC Image Generation")
     expect(joined).toContain("generate_image")
     expect(joined).toContain("Selection Guidelines")
@@ -284,6 +286,11 @@ describe("createInlineImageTextCompleteHook", () => {
   let tempRoot: string
   const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47])
   const PNG_BASE64 = PNG_BYTES.toString("base64")
+  const DATA_URI = `data:image/png;base64,${PNG_BASE64}`
+
+  function expectedHtml(alt: string, dataUri: string): string {
+    return `<a href="${dataUri}" target="_blank" rel="noopener"><img src="${dataUri}" alt="${alt}" style="max-width:100%;cursor:zoom-in" /></a>`
+  }
 
   beforeEach(async () => {
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "openprism-hooks-text-complete-"))
@@ -293,7 +300,7 @@ describe("createInlineImageTextCompleteHook", () => {
     await fs.rm(tempRoot, { recursive: true, force: true })
   })
 
-  it("converts absolute image paths under outputDir to data URIs", async () => {
+  it("converts absolute image paths under outputDir to clickable data URI images", async () => {
     const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
     await fs.mkdir(outputDir, { recursive: true })
 
@@ -305,7 +312,7 @@ describe("createInlineImageTextCompleteHook", () => {
 
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
-    expect(output.text).toBe(`![plot](data:image/png;base64,${PNG_BASE64})`)
+    expect(output.text).toBe(expectedHtml("plot", DATA_URI))
   })
 
   it("does not convert image paths outside the plugin output directory", async () => {
@@ -332,7 +339,7 @@ describe("createInlineImageTextCompleteHook", () => {
 
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
-    expect(output.text).toBe(`![plot](data:image/png;base64,${PNG_BASE64})`)
+    expect(output.text).toBe(expectedHtml("plot", DATA_URI))
   })
 
   it("converts relative image links that point to outputDir", async () => {
@@ -347,7 +354,7 @@ describe("createInlineImageTextCompleteHook", () => {
 
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
-    expect(output.text).toBe(`![plot](data:image/png;base64,${PNG_BASE64})`)
+    expect(output.text).toBe(expectedHtml("plot", DATA_URI))
   })
 
   it("leaves non-image extension links unchanged", async () => {
@@ -360,7 +367,7 @@ describe("createInlineImageTextCompleteHook", () => {
     expect(transformed).toBe(text)
   })
 
-  it("appends latest tool image as data URI when assistant text has no image", async () => {
+  it("appends latest tool image as clickable HTML when assistant text has no image", async () => {
     const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
     await fs.mkdir(outputDir, { recursive: true })
 
@@ -379,7 +386,7 @@ describe("createInlineImageTextCompleteHook", () => {
     const output = { text: "Plot created successfully." }
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
-    expect(output.text).toContain(`![OpenPrism image](data:image/png;base64,${PNG_BASE64})`)
+    expect(output.text).toContain(expectedHtml("OpenPrism image", DATA_URI))
   })
 
   it("does not append fallback image when markdown image already exists", async () => {
@@ -398,7 +405,7 @@ describe("createInlineImageTextCompleteHook", () => {
     const output = { text: `![plot](${firstImagePath})` }
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
-    expect(output.text).toContain(`![plot](data:image/png;base64,${PNG_BASE64})`)
+    expect(output.text).toContain(expectedHtml("plot", DATA_URI))
     expect(output.text).not.toContain("OpenPrism image")
   })
 
@@ -417,11 +424,26 @@ describe("createInlineImageTextCompleteHook", () => {
 
   it("leaves already-inlined data URIs unchanged", async () => {
     const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots")
-    const dataUri = `data:image/png;base64,${PNG_BASE64}`
-    const output = { text: `![plot](${dataUri})` }
+    const output = { text: `![plot](${DATA_URI})` }
 
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
-    expect(output.text).toBe(`![plot](${dataUri})`)
+    expect(output.text).toBe(`![plot](${DATA_URI})`)
+  })
+
+  it("escapes HTML special characters in alt text", async () => {
+    const outputDir = path.join(tempRoot, ".opencode", "plots", "mermaid")
+    await fs.mkdir(outputDir, { recursive: true })
+
+    const imagePath = path.join(outputDir, "diagram.png")
+    await fs.writeFile(imagePath, PNG_BYTES)
+
+    const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots")
+    const output = { text: `![A<B & "C"](${imagePath})` }
+
+    await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
+
+    expect(output.text).toContain('alt="A&lt;B &amp; &quot;C&quot;"')
+    expect(output.text).toContain(`src="${DATA_URI}"`)
   })
 })

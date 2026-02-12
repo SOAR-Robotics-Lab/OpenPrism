@@ -33,6 +33,7 @@ export function createSystemPromptHook(
         "Use for data plots, charts, histograms, scatter plots, and any quantitative visualization.",
         "- Tool: `plot_data` — executes a Python/Matplotlib script and saves the output",
         "- Do NOT include plt.show() or matplotlib.use() — they are injected automatically.",
+        "- **IMPORTANT**: Always use English for all text in plots (titles, labels, legends, annotations). CJK characters (Chinese, Japanese, Korean) will render as blank squares due to missing fonts in the default Matplotlib environment. If the user requests CJK text, politely note the font limitation and offer an English alternative.",
         "- Prefer Matplotlib when analyzing data, benchmarking, or visualizing algorithm behavior.",
         "",
       )

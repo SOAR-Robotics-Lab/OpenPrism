@@ -92,10 +92,15 @@ export async function inlineLocalImageMarkdown(
       continue
     }
 
-    transformed = transformed.replace(fullMatch, `![${alt}](${dataUri})`)
+    const htmlImg = `<a href="${dataUri}" target="_blank" rel="noopener"><img src="${dataUri}" alt="${escapeHtmlAttr(alt)}" style="max-width:100%;cursor:zoom-in" /></a>`
+    transformed = transformed.replace(fullMatch, htmlImg)
   }
 
   return transformed
+}
+
+function escapeHtmlAttr(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 }
 
 async function fileToDataUri(filePath: string): Promise<string | undefined> {

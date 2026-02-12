@@ -47,6 +47,11 @@ export function createPlotDataTool(fileManager: FileManager) {
           args.description ?? "Matplotlib visualization",
         )
 
+        context.metadata({
+          title: args.description ?? "Matplotlib visualization",
+          metadata: { filePath: result.filePath },
+        })
+
         const output = [
           `Matplotlib plot generated successfully.`,
           `File: ${result.filePath}`,

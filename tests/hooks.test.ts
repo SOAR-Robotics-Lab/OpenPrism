@@ -16,7 +16,7 @@ describe("createSystemPromptHook", () => {
   it("injects all three tier sections when all tiers are enabled", async () => {
     const hook = createSystemPromptHook({ ...DEFAULT_CONFIG })
     const output = { system: [] as string[] }
-    await hook({ model: { id: "test", name: "test", provider: "test" } }, output)
+    await hook({ model: { id: "test", name: "test", providerID: "test" } as Parameters<typeof hook>[0]["model"] }, output)
 
     const joined = output.system.join("\n")
     expect(joined).toContain("Tier 1: Mermaid Diagrams")
@@ -33,7 +33,7 @@ describe("createSystemPromptHook", () => {
     const config: OpenPrismConfig = { ...DEFAULT_CONFIG, mermaidEnabled: false }
     const hook = createSystemPromptHook(config)
     const output = { system: [] as string[] }
-    await hook({ model: { id: "test", name: "test", provider: "test" } }, output)
+    await hook({ model: { id: "test", name: "test", providerID: "test" } as Parameters<typeof hook>[0]["model"] }, output)
 
     const joined = output.system.join("\n")
     expect(joined).not.toContain("Tier 1: Mermaid Diagrams")
@@ -47,7 +47,7 @@ describe("createSystemPromptHook", () => {
     const config: OpenPrismConfig = { ...DEFAULT_CONFIG, matplotlibEnabled: false }
     const hook = createSystemPromptHook(config)
     const output = { system: [] as string[] }
-    await hook({ model: { id: "test", name: "test", provider: "test" } }, output)
+    await hook({ model: { id: "test", name: "test", providerID: "test" } as Parameters<typeof hook>[0]["model"] }, output)
 
     const joined = output.system.join("\n")
     expect(joined).not.toContain("Tier 2: Matplotlib Data Visualization")
@@ -60,7 +60,7 @@ describe("createSystemPromptHook", () => {
     const config: OpenPrismConfig = { ...DEFAULT_CONFIG, aigcEnabled: false }
     const hook = createSystemPromptHook(config)
     const output = { system: [] as string[] }
-    await hook({ model: { id: "test", name: "test", provider: "test" } }, output)
+    await hook({ model: { id: "test", name: "test", providerID: "test" } as Parameters<typeof hook>[0]["model"] }, output)
 
     const joined = output.system.join("\n")
     expect(joined).not.toContain("Tier 3: AIGC Image Generation")
@@ -78,7 +78,7 @@ describe("createSystemPromptHook", () => {
     }
     const hook = createSystemPromptHook(config)
     const output = { system: [] as string[] }
-    await hook({ model: { id: "test", name: "test", provider: "test" } }, output)
+    await hook({ model: { id: "test", name: "test", providerID: "test" } as Parameters<typeof hook>[0]["model"] }, output)
 
     const joined = output.system.join("\n")
     expect(joined).toContain("Selection Guidelines")
@@ -229,5 +229,26 @@ describe("createMermaidAfterHook", () => {
     expect(assets).toHaveLength(1)
     expect(assets[0]!.tier).toBe(1)
     expect(assets[0]!.description).toContain("Auto-rendered Mermaid diagram")
+
+    // Verify metadata includes filePath for web UI display
+    const meta = output.metadata as Record<string, unknown>
+    expect(meta.filePath).toBeDefined()
+    expect(typeof meta.filePath).toBe("string")
+    expect(meta.filePath as string).toContain(".svg")
+  })
+
+  it("does not set metadata.filePath when no valid blocks render", async () => {
+    const fileManager = new FileManager(tempRoot)
+    await fileManager.ensureDir()
+    const hook = createMermaidAfterHook(fileManager)
+
+    const output = {
+      title: "test",
+      output: "```mermaid\nnot-valid\nstuff\n```",
+      metadata: {} as Record<string, unknown>,
+    }
+    await hook({ tool: "bash", sessionID: "s1", callID: "c1" }, output)
+
+    expect(output.metadata.filePath).toBeUndefined()
   })
 })

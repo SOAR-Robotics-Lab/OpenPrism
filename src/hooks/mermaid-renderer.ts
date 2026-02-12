@@ -10,6 +10,7 @@ export function createMermaidAfterHook(
     if (blocks.length === 0) return
 
     const renderResults: string[] = []
+    let lastRenderedPath: string | undefined
 
     for (const block of blocks) {
       const validation = validateMermaidSyntax(block)
@@ -28,6 +29,7 @@ export function createMermaidAfterHook(
           `Auto-rendered Mermaid diagram (${block.split("\n")[0]?.trim().slice(0, 40)})`,
         )
 
+        lastRenderedPath = result.filePath
         renderResults.push(
           `[OpenPrism] Rendered Mermaid diagram → ${result.filePath} (${result.size} bytes)`,
         )
@@ -39,6 +41,13 @@ export function createMermaidAfterHook(
 
     if (renderResults.length > 0) {
       output.output += "\n\n" + renderResults.join("\n")
+    }
+
+    if (lastRenderedPath) {
+      output.metadata = {
+        ...(output.metadata as Record<string, unknown> | undefined),
+        filePath: lastRenderedPath,
+      }
     }
   }
 }

@@ -22,7 +22,7 @@ export function createRenderMermaidTool(fileManager: FileManager) {
         .optional()
         .describe("Human-readable description of the diagram for asset tracking"),
     },
-    async execute(args, _context) {
+    async execute(args, context) {
       const validation = validateMermaidSyntax(args.source)
       if (!validation.valid) {
         return `Error: Invalid Mermaid syntax — ${validation.error}`
@@ -47,6 +47,11 @@ export function createRenderMermaidTool(fileManager: FileManager) {
           result.filePath,
           args.description ?? "Mermaid diagram",
         )
+
+        context.metadata({
+          title: args.description ?? "Mermaid diagram",
+          metadata: { filePath: result.filePath },
+        })
 
         return [
           `Mermaid diagram rendered successfully.`,

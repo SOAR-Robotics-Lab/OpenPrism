@@ -19,6 +19,8 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "tsc --noEmit && echo 'Typecheck passed'"
   },
   "keywords": [
@@ -38,8 +40,10 @@
     "@opencode-ai/plugin": "latest"
   },
   "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.12.0",
     "@types/node": "^25.2.3",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.18"
   },
   "peerDependencies": {
     "@mermaid-js/mermaid-cli": ">=11.0.0"

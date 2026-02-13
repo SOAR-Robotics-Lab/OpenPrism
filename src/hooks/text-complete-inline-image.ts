@@ -3,7 +3,6 @@ import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import type { Hooks } from "@opencode-ai/plugin"
 import type { MediaServer } from "../utils/media-server.js"
-import { generateThumbnailBase64 } from "../utils/thumbnail.js"
 
 const SUPPORTED_IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"])
 
@@ -45,6 +44,7 @@ export function createInlineImageTextCompleteHook(
       options?.mediaServer,
       resolvedProjectDir,
     )
+
   }
 }
 
@@ -108,22 +108,36 @@ export async function inlineLocalImageMarkdown(
     const mime = MIME_BY_EXT[ext] ?? "image/png"
     const registration = await registerImageWithServer(mediaServer, resolvedPath, alt, mime)
     const label = alt || "image"
+    const dataUri = await readFileAsDataUri(resolvedPath, mime)
 
-    const thumbnail = await generateThumbnailBase64(resolvedPath, allowedRoot)
+    const escapedLabel = escapeHtml(label)
     let replacement: string
-    if (thumbnail && registration) {
-      replacement = `![${label}](data:image/webp;base64,${thumbnail})\n[🔍 ${label}](${registration.viewUrl})`
-    } else if (thumbnail) {
-      replacement = `![${label}](data:image/webp;base64,${thumbnail})`
+    if (dataUri && registration) {
+      replacement = `<a href="${registration.viewUrl}" target="_blank" rel="noopener noreferrer"><img src="${dataUri}" alt="${escapedLabel}"/></a>`
+    } else if (dataUri) {
+      replacement = `<img src="${dataUri}" alt="${escapedLabel}"/>`
     } else if (registration) {
-      replacement = `[🖼 ${label}](${registration.viewUrl})`
+      replacement = `[${label}](${registration.viewUrl})`
     } else {
-      replacement = `[🖼 ${label}](${source})`
+      replacement = fullMatch
     }
     transformed = transformed.replace(fullMatch, replacement)
   }
 
   return transformed
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+}
+
+async function readFileAsDataUri(filePath: string, mime: string): Promise<string | undefined> {
+  try {
+    const buf = await fs.readFile(filePath)
+    return `data:${mime};base64,${buf.toString("base64")}`
+  } catch {
+    return undefined
+  }
 }
 
 function replaceViewerUrls(text: string): string {

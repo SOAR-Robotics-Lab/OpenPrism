@@ -88,10 +88,10 @@ export function createSystemPromptHook(
       "- When unsure, default to Mermaid for structural topics, Plotly for simple data, Matplotlib for complex data.",
       "",
       "### Media Display",
-      "- All generated images appear as clickable thumbnails in chat. Click to open the full viewer in a new tab.",
+      "- All generated images appear inline in chat. Click an image to open the full-size viewer in a new tab.",
       "- Plotly charts open as fully interactive pages (zoom, hover, legend toggle).",
       "- You can reference local image or video files using markdown: `![description](path/to/file)`",
-      "  The plugin will automatically create viewable thumbnails for files under the output directory.",
+      "  The plugin will automatically inline the image and make it clickable for full-size viewing.",
     )
 
     output.system.push(sections.join("\n"))

@@ -204,29 +204,7 @@ Provider is auto-detected from environment variables (`GEMINI_API_KEY` or `OPENR
 
 Simply include Mermaid code blocks in your conversation with the agent — OpenPrism will auto-render them:
 
-```
-User: Show me the authentication flow for our API.
-
-Agent: Here's the sequence diagram:
-
-    ```mermaid
-    sequenceDiagram
-        Client->>API: POST /login
-        API->>DB: Validate credentials
-        DB-->>API: User record
-        API->>API: Generate JWT
-        API-->>Client: 200 + token
-    ```
-
-[OpenPrism] Rendered Mermaid diagram -> .opencode/plots/mermaid/auto-mermaid-2025-01-15T10-30-00-a1b2.svg
-```
-
-Or use the `analyze_structure` tool to visualize your project:
-
-```
-User: Show me the project structure as a diagram.
-Agent: (calls analyze_structure tool)
-```
+![](./docs/show_struct.png)
 
 ### Tier 2a: Matplotlib Plots (Static)
 

@@ -1,11 +1,19 @@
 # OpenPrism
 
-<img src="./docs/logo.png" alt="OpenPrism logo" width="360" />
+[中文快速跳转](#readme-zh)
 
-[![Version](https://img.shields.io/badge/version-v0.1.0-369eff?style=flat-square)](https://github.com/SOAR-Robotics-Lab/OpenPrism)
-[![License](https://img.shields.io/badge/license-MIT-black?style=flat-square)](./LICENSE)
+<p align="center">
+  <img src="./docs/logo.png" alt="OpenPrism logo" width="220" />
+</p>
 
-![](./docs/struct.png)
+<p align="center">
+  <a href="https://github.com/SOAR-Robotics-Lab/OpenPrism"><img src="https://img.shields.io/badge/version-v0.1.0-369eff?style=flat-square" alt="Version" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-black?style=flat-square" alt="License" /></a>
+</p>
+
+<p align="center">
+  <img src="./docs/struct.png" alt="OpenPrism structure" width="920" />
+</p>
 
 **Multi-tier drawing plugin for the OpenCode ecosystem** — bringing Mermaid diagrams, Matplotlib visualizations, Plotly.js interactive charts, and AIGC image generation to your AI coding agent.
 
@@ -14,6 +22,20 @@ OpenPrism extends OpenCode with multi-tier visual capabilities, enabling your AI
 > **Version:** `0.1.0` (current)
 
 ---
+
+## Contents
+
+- [Why OpenPrism?](#why)
+- [Features](#features)
+- [Use Cases](#use-cases)
+- [Modes: Web vs CLI](#modes)
+- [Limitations (current)](#limitations)
+- [Quick Start](#quick-start)
+- [Available Tools](#tools)
+- [About the authors / credits](#authors)
+- [Open source](#oss)
+
+<a id="why"></a>
 
 ## Why OpenPrism?
 
@@ -27,6 +49,8 @@ OpenPrism is built to make “coding agent for research” feel more like a real
 
 ---
 
+<a id="features"></a>
+
 ## Features
 
 | Tier | Engine | Capability |
@@ -37,6 +61,45 @@ OpenPrism is built to make “coding agent for research” feel more like a real
 | **3** | AIGC (Gemini / OpenRouter) | UI mockups, icons, creative assets, image editing — built-in multi-provider support |
 
 ---
+
+<a id="use-cases"></a>
+
+## Use Cases
+
+### Tier 1: Mermaid diagrams inside chat
+
+Simply include Mermaid code blocks in your conversation. OpenPrism auto-renders them:
+
+![](./docs/show_struct.png)
+
+### Tier 2a: Matplotlib for static analysis plots
+
+![](./docs/draw_pde.png)
+
+### Tier 2b: Plotly.js interactive charts
+
+```json
+{
+  "data": [
+    {"x": ["Jan", "Feb", "Mar", "Apr"], "y": [120, 135, 148, 162], "name": "Product A", "type": "scatter"},
+    {"x": ["Jan", "Feb", "Mar", "Apr"], "y": [90, 95, 102, 88], "name": "Product B", "type": "scatter"},
+    {"x": ["Jan", "Feb", "Mar", "Apr"], "y": [45, 52, 58, 71], "name": "Product C", "type": "scatter"}
+  ],
+  "layout": {"title": "Monthly Sales Comparison", "xaxis": {"title": "Month"}, "yaxis": {"title": "Units"}}
+}
+```
+
+### Tier 3: AIGC image generation
+
+![](./docs/AIGC.png)
+
+### Existing visual result showcase
+
+![](./docs/show_existing.png)
+
+---
+
+<a id="modes"></a>
 
 ## Modes: Web vs CLI
 
@@ -70,7 +133,7 @@ graph LR
     I --> J[Interactive Viewer]
     H --> K[Asset Manager]
     K --> L[.opencode/plots/]
-````
+```
 
 ### Hooks
 
@@ -85,6 +148,8 @@ OpenPrism also installs lifecycle hooks that enhance the agent automatically:
 | `experimental.chat.messages.transform` | Strips image data URIs before sending to LLM (zero context bloat)  |
 
 ---
+
+<a id="limitations"></a>
 
 ## Limitations (current)
 
@@ -104,6 +169,8 @@ Due to OpenCode permission constraints:
 We will actively explore submitting PRs to OpenCode to remove these constraints and provide a more ideal experience.
 
 ---
+
+<a id="quick-start"></a>
 
 ## Quick Start
 
@@ -199,6 +266,8 @@ OpenPrism auto-detects available providers. If both keys are set, Gemini is used
 
 ---
 
+<a id="tools"></a>
+
 ## Available Tools
 
 ### `render_mermaid`
@@ -267,6 +336,8 @@ Generates or edits images via built-in AIGC providers (Gemini, OpenRouter).
 
 ---
 
+<a id="authors"></a>
+
 ## About the authors / credits
 
 * **SOAR-LAB** is a robotics research team led by **Dr. Xu Hao** (SOAR-LAB, Flying General Intelligence Lab). Team members are currently mainly based at **Beihang University**.
@@ -276,6 +347,8 @@ Generates or edits images via built-in AIGC providers (Gemini, OpenRouter).
 * 100% vibe coding generated. Manual coding is dead. Vibe coding lives forever.
 
 ---
+
+<a id="oss"></a>
 
 ## Open source
 
@@ -289,11 +362,19 @@ MIT
 
 ---
 
+<a id="readme-zh"></a>
+
 # OpenPrism（中文）
 
-<img src="./docs/logo.png" alt="OpenPrism logo" width="360" />
+[Back to English](#openprism)
 
-![](./docs/struct.png)
+<p align="center">
+  <img src="./docs/logo.png" alt="OpenPrism logo" width="220" />
+</p>
+
+<p align="center">
+  <img src="./docs/struct.png" alt="OpenPrism structure" width="920" />
+</p>
 
 **面向 OpenCode 生态的多层级绘图插件** ——把 Mermaid 结构图、Matplotlib 论文级可视化、Plotly.js 交互图表，以及 AIGC 图像生成带到你的 AI coding agent 里。
 
@@ -302,6 +383,21 @@ OpenPrism 为 OpenCode 增强多层级可视化能力，让你的 AI 助手不�
 > **版本：** `0.1.0`（当前）
 
 ---
+
+## 目录
+
+- [为什么要做 OpenPrism？](#zh-why)
+- [功能特性](#zh-features)
+- [典型用例](#zh-use-cases)
+- [模式说明：Web / CLI](#zh-modes)
+- [当前限制（limitation）](#zh-limitations)
+- [快速开始](#zh-quick-start)
+- [作者说明 / 致谢](#zh-authors)
+- [开源地址](#zh-oss)
+
+---
+
+<a id="zh-why"></a>
 
 ## 为什么要做 OpenPrism？
 
@@ -315,6 +411,8 @@ OpenPrism 目标是把 coding agent 变成更像实验室笔记本：**文字 + 
 
 ---
 
+<a id="zh-features"></a>
+
 ## 功能特性
 
 | 层级     | 引擎                        | 能力                                  |
@@ -326,6 +424,45 @@ OpenPrism 目标是把 coding agent 变成更像实验室笔记本：**文字 + 
 
 ---
 
+<a id="zh-use-cases"></a>
+
+## 典型用例
+
+### Tier 1：会话内 Mermaid 架构图
+
+对话中直接写 Mermaid 代码块，OpenPrism 会自动渲染：
+
+![](./docs/show_struct.png)
+
+### Tier 2a：Matplotlib 静态分析图
+
+![](./docs/draw_pde.png)
+
+### Tier 2b：Plotly.js 交互图表
+
+```json
+{
+  "data": [
+    {"x": ["Jan", "Feb", "Mar", "Apr"], "y": [120, 135, 148, 162], "name": "Product A", "type": "scatter"},
+    {"x": ["Jan", "Feb", "Mar", "Apr"], "y": [90, 95, 102, 88], "name": "Product B", "type": "scatter"},
+    {"x": ["Jan", "Feb", "Mar", "Apr"], "y": [45, 52, 58, 71], "name": "Product C", "type": "scatter"}
+  ],
+  "layout": {"title": "Monthly Sales Comparison", "xaxis": {"title": "Month"}, "yaxis": {"title": "Units"}}
+}
+```
+
+### Tier 3：AIGC 图像生成
+
+![](./docs/AIGC.png)
+
+### 既有结果展示
+
+![](./docs/show_existing.png)
+
+---
+
+<a id="zh-modes"></a>
+
 ## 模式说明：Web / CLI
 
 本插件支持 **Web 模式** 与 **CLI 模式**。
@@ -336,6 +473,8 @@ OpenPrism 目标是把 coding agent 变成更像实验室笔记本：**文字 + 
 如果你现在就需要交互图表，优先使用 **CLI 模式**；如果你更依赖 AIGC 的稳定性，建议暂时优先使用 **Web 模式**。
 
 ---
+
+<a id="zh-limitations"></a>
 
 ## 当前限制（limitation）
 
@@ -349,6 +488,8 @@ OpenPrism 目标是把 coding agent 变成更像实验室笔记本：**文字 + 
 作者会积极探索给 OpenCode 提 PR 解决限制，以获得更理想的体验！
 
 ---
+
+<a id="zh-quick-start"></a>
 
 ## 快速开始
 
@@ -434,6 +575,8 @@ OpenPrism 会自动检测可用提供方；如果两者都配置，默认优先 
 
 ---
 
+<a id="zh-authors"></a>
+
 ## 作者说明 / 致谢
 
 * **SOAR-LAB（飞行通用智能实验室）** 是由 **徐浩博士** 领衔的机器人科研团队，成员目前主要位于 **北京航空航天大学**。
@@ -443,6 +586,8 @@ OpenPrism 会自动检测可用提供方；如果两者都配置，默认优先 
 * 本项目 100% vibe coding 生成：古法手动编程已死，vibe coding 万岁！
 
 ---
+
+<a id="zh-oss"></a>
 
 ## 开源地址
 

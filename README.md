@@ -340,7 +340,7 @@ Generates or edits images via built-in AIGC providers (Gemini, OpenRouter).
 
 ## About the authors / credits
 
-* **SOAR-LAB** is a robotics research team led by **Dr. Xu Hao** (SOAR-LAB, Flying General Intelligence Lab). Team members are currently mainly based at **Beihang University**.
+* **SOAR-LAB** is a robotics research team led by **Dr. Xu Hao** (SOAR-LAB, Flying General Intelligence Lab).
 * This project is co-developed with the **Mondo Robotics** engineering team, and funded by Mondo Robotics.
 * Motivation: while tuning learning experiments, repeatedly digging through the filesystem for plots and artifacts is painful. Visualization is not a “nice-to-have” — it is essential for research workflows inside coding agents. OpenPrism was built (and open-sourced) to make that loop dramatically faster.
 * Need help or found a bug? Please open an issue. Dr. Xu plans to deploy an agent to automatically collect feedback and turn it into actionable improvements.
@@ -579,7 +579,7 @@ OpenPrism 会自动检测可用提供方；如果两者都配置，默认优先 
 
 ## 作者说明 / 致谢
 
-* **SOAR-LAB（飞行通用智能实验室）** 是由 **徐浩博士** 领衔的机器人科研团队，成员目前主要位于 **北京航空航天大学**。
+* **SOAR-LAB（飞行通用智能实验室）** 是由 **徐浩博士** 领衔的机器人科研团队。
 * 本项目由徐博士与 **妙动（Mondo Robotics）** 科技团队联合开发，并由妙动科技提供资助与工程支持。
 * 项目缘起：在调 learning/实验时反复翻文件系统找结果极其低效——而在 coding agent 场景下，“随手可视化”对科研是刚需。OpenPrism 希望把这件事变得顺滑：该画就画，该算就算，结果就地展示。
 * 如遇问题请直接提 issue；徐博士计划部署一个 agent 自动收集反馈、归纳共性问题，并持续迭代改进。

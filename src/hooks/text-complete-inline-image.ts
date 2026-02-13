@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import type { Hooks } from "@opencode-ai/plugin"
 import type { MediaServer } from "../utils/media-server.js"
+import { generateThumbnailBase64 } from "../utils/thumbnail.js"
 
 const SUPPORTED_IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"])
 
@@ -105,11 +106,20 @@ export async function inlineLocalImageMarkdown(
 
     const ext = path.extname(resolvedPath).toLowerCase()
     const mime = MIME_BY_EXT[ext] ?? "image/png"
-    const viewerUrl = await registerImageWithServer(mediaServer, resolvedPath, alt, mime)
-    const label = alt || "View image"
-    const replacement = viewerUrl
-      ? `[🖼 ${label}](${viewerUrl})`
-      : `[🖼 ${label}](${source})`
+    const registration = await registerImageWithServer(mediaServer, resolvedPath, alt, mime)
+    const label = alt || "image"
+
+    const thumbnail = await generateThumbnailBase64(resolvedPath, allowedRoot)
+    let replacement: string
+    if (thumbnail && registration) {
+      replacement = `![${label}](data:image/webp;base64,${thumbnail})\n[🔍 ${label}](${registration.viewUrl})`
+    } else if (thumbnail) {
+      replacement = `![${label}](data:image/webp;base64,${thumbnail})`
+    } else if (registration) {
+      replacement = `[🖼 ${label}](${registration.viewUrl})`
+    } else {
+      replacement = `[🖼 ${label}](${source})`
+    }
     transformed = transformed.replace(fullMatch, replacement)
   }
 
@@ -127,7 +137,7 @@ async function registerImageWithServer(
   filePath: string,
   description: string,
   mimeType: string,
-): Promise<string | undefined> {
+): Promise<{ rawUrl: string; viewUrl: string } | undefined> {
   if (!mediaServer) {
     return undefined
   }
@@ -136,7 +146,10 @@ async function registerImageWithServer(
     await mediaServer.ensureStarted()
     const id = randomUUID()
     mediaServer.registerMedia({ id, kind: "image", filePath, mimeType, description })
-    return mediaServer.viewUrl(id)
+    return {
+      rawUrl: mediaServer.mediaUrl(id),
+      viewUrl: mediaServer.viewUrl(id),
+    }
   } catch {
     return undefined
   }

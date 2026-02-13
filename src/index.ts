@@ -10,11 +10,13 @@ import { createAnalyzeStructureTool } from "./tools/analyze-structure.js"
 import { createPlotDataTool } from "./tools/plot-data.js"
 import { createPlotInteractiveTool } from "./tools/plot-interactive.js"
 import { createGenerateImageTool } from "./tools/generate-image.js"
+import { createProvider } from "./providers/index.js"
 
 import { createMermaidAfterHook } from "./hooks/mermaid-renderer.js"
 import { createSystemPromptHook } from "./hooks/system-prompt.js"
 import { createSessionCompactionHook } from "./hooks/session-compaction.js"
 import { createInlineImageTextCompleteHook } from "./hooks/text-complete-inline-image.js"
+import { createStripImagesTransformHook } from "./hooks/strip-images-transform.js"
 
 export const OpenPrismPlugin: Plugin = async (ctx) => {
   const config: OpenPrismConfig = { ...DEFAULT_CONFIG }
@@ -22,6 +24,7 @@ export const OpenPrismPlugin: Plugin = async (ctx) => {
   const latestImageBySession = new Map<string, string>()
   const projectRoot = path.resolve(ctx.directory)
   const mediaServer = new MediaServer(projectRoot)
+  const aigcProvider = createProvider(config.aigcProvider)
 
   await fileManager.ensureDir()
 
@@ -41,7 +44,7 @@ export const OpenPrismPlugin: Plugin = async (ctx) => {
   }
 
   if (config.aigcEnabled) {
-    tools["generate_image"] = createGenerateImageTool(fileManager)
+    tools["generate_image"] = createGenerateImageTool(fileManager, aigcProvider)
   }
 
   return {
@@ -59,6 +62,7 @@ export const OpenPrismPlugin: Plugin = async (ctx) => {
       },
       mediaServer,
     }),
+    "experimental.chat.messages.transform": createStripImagesTransformHook(),
   }
 }
 

@@ -287,12 +287,7 @@ describe("createMermaidAfterHook", () => {
 describe("createInlineImageTextCompleteHook", () => {
   let tempRoot: string
   const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47])
-  const PNG_BASE64 = PNG_BYTES.toString("base64")
-  const DATA_URI = `data:image/png;base64,${PNG_BASE64}`
-
-  function expectedHtml(alt: string, dataUri: string): string {
-    return `<a href="${dataUri}" class="external-link" target="_blank" rel="noopener noreferrer"><img src="${dataUri}" alt="${alt}" style="max-width:100%;cursor:zoom-in" /></a>`
-  }
+  const DATA_URI = `data:image/png;base64,${PNG_BYTES.toString("base64")}`
 
   beforeEach(async () => {
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "openprism-hooks-text-complete-"))
@@ -302,7 +297,7 @@ describe("createInlineImageTextCompleteHook", () => {
     await fs.rm(tempRoot, { recursive: true, force: true })
   })
 
-  it("converts absolute image paths under outputDir to clickable data URI images", async () => {
+  it("replaces absolute image path with text link (no data URI)", async () => {
     const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
     await fs.mkdir(outputDir, { recursive: true })
 
@@ -314,7 +309,9 @@ describe("createInlineImageTextCompleteHook", () => {
 
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
-    expect(output.text).toBe(expectedHtml("plot", DATA_URI))
+    expect(output.text).not.toContain("data:")
+    expect(output.text).not.toContain("<img")
+    expect(output.text).toContain("🖼 plot")
   })
 
   it("does not convert image paths outside the project directory", async () => {
@@ -331,7 +328,7 @@ describe("createInlineImageTextCompleteHook", () => {
     await fs.rm(outsideDir, { recursive: true, force: true })
   })
 
-  it("converts web-root image links that point to outputDir", async () => {
+  it("replaces web-root image link with text link", async () => {
     const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
     await fs.mkdir(outputDir, { recursive: true })
 
@@ -343,10 +340,11 @@ describe("createInlineImageTextCompleteHook", () => {
 
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
-    expect(output.text).toBe(expectedHtml("plot", DATA_URI))
+    expect(output.text).not.toContain("data:")
+    expect(output.text).toContain("🖼 plot")
   })
 
-  it("converts relative image links that point to outputDir", async () => {
+  it("replaces relative image link with text link", async () => {
     const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
     await fs.mkdir(outputDir, { recursive: true })
 
@@ -358,7 +356,8 @@ describe("createInlineImageTextCompleteHook", () => {
 
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
-    expect(output.text).toBe(expectedHtml("plot", DATA_URI))
+    expect(output.text).not.toContain("data:")
+    expect(output.text).toContain("🖼 plot")
   })
 
   it("leaves non-image extension links unchanged", async () => {
@@ -371,7 +370,7 @@ describe("createInlineImageTextCompleteHook", () => {
     expect(transformed).toBe(text)
   })
 
-  it("appends latest tool image as clickable HTML when assistant text has no image", async () => {
+  it("appends fallback text link when assistant text has no image", async () => {
     const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
     await fs.mkdir(outputDir, { recursive: true })
 
@@ -390,7 +389,8 @@ describe("createInlineImageTextCompleteHook", () => {
     const output = { text: "Plot created successfully." }
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
-    expect(output.text).toContain(expectedHtml("OpenPrism image", DATA_URI))
+    expect(output.text).not.toContain("data:")
+    expect(output.text).toContain("🖼 OpenPrism image")
   })
 
   it("does not append fallback image when markdown image already exists", async () => {
@@ -409,7 +409,7 @@ describe("createInlineImageTextCompleteHook", () => {
     const output = { text: `![plot](${firstImagePath})` }
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
-    expect(output.text).toContain(expectedHtml("plot", DATA_URI))
+    expect(output.text).toContain("🖼 plot")
     expect(output.text).not.toContain("OpenPrism image")
   })
 
@@ -435,7 +435,7 @@ describe("createInlineImageTextCompleteHook", () => {
     expect(output.text).toBe(`![plot](${DATA_URI})`)
   })
 
-  it("escapes HTML special characters in alt text", async () => {
+  it("preserves alt text with special characters in text link", async () => {
     const outputDir = path.join(tempRoot, ".opencode", "plots", "mermaid")
     await fs.mkdir(outputDir, { recursive: true })
 
@@ -447,36 +447,34 @@ describe("createInlineImageTextCompleteHook", () => {
 
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
-    expect(output.text).toContain('alt="A&lt;B &amp; &quot;C&quot;"')
-    expect(output.text).toContain(`src="${DATA_URI}"`)
+    expect(output.text).not.toContain("data:")
+    expect(output.text).toContain('🖼 A<B & "C"')
   })
 
-  it("emits a text-only link for images larger than 8 KB (no data URI in context)", async () => {
+  it("never inlines data URIs regardless of file size", async () => {
     const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
     await fs.mkdir(outputDir, { recursive: true })
 
-    const imagePath = path.join(outputDir, "large-plot.png")
-    const largeBuffer = Buffer.alloc(10 * 1024, 0x42)
-    await fs.writeFile(imagePath, largeBuffer)
+    const imagePath = path.join(outputDir, "tiny.png")
+    await fs.writeFile(imagePath, PNG_BYTES)
 
     const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots")
-    const output = { text: `![big chart](${imagePath})` }
+    const output = { text: `![tiny](${imagePath})` }
 
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
     expect(output.text).not.toContain("data:image")
     expect(output.text).not.toContain("<img")
-    expect(output.text).toContain("🖼 big chart")
-    expect(output.text).toContain(imagePath)
+    expect(output.text).not.toContain("base64")
+    expect(output.text).toContain("🖼 tiny")
   })
 
-  it("uses viewer URL for large images when mediaServer is available", async () => {
+  it("uses viewer URL when mediaServer is available", async () => {
     const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
     await fs.mkdir(outputDir, { recursive: true })
 
-    const imagePath = path.join(outputDir, "large-plot.png")
-    const largeBuffer = Buffer.alloc(10 * 1024, 0x42)
-    await fs.writeFile(imagePath, largeBuffer)
+    const imagePath = path.join(outputDir, "plot.png")
+    await fs.writeFile(imagePath, PNG_BYTES)
 
     const fakeViewerUrl = "http://127.0.0.1:12345/view/fake-id"
     const fakeMediaServer = {
@@ -488,29 +486,27 @@ describe("createInlineImageTextCompleteHook", () => {
     const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots", {
       mediaServer: fakeMediaServer,
     })
-    const output = { text: `![big chart](${imagePath})` }
+    const output = { text: `![chart](${imagePath})` }
 
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
-    expect(output.text).not.toContain("data:image")
-    expect(output.text).toContain("🖼 big chart")
+    expect(output.text).not.toContain("data:")
+    expect(output.text).toContain("🖼 chart")
     expect(output.text).toContain(fakeViewerUrl)
   })
 
-  it("still inlines images at exactly 8 KB", async () => {
+  it("falls back to source path when no mediaServer", async () => {
     const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
     await fs.mkdir(outputDir, { recursive: true })
 
-    const imagePath = path.join(outputDir, "edge.png")
-    const edgeBuffer = Buffer.alloc(8 * 1024, 0x42)
-    await fs.writeFile(imagePath, edgeBuffer)
+    const imagePath = path.join(outputDir, "plot.png")
+    await fs.writeFile(imagePath, PNG_BYTES)
 
     const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots")
-    const output = { text: `![edge case](${imagePath})` }
+    const output = { text: `![chart](${imagePath})` }
 
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
-    expect(output.text).toContain("data:image/png;base64,")
-    expect(output.text).toContain("<img")
+    expect(output.text).toBe(`[🖼 chart](${imagePath})`)
   })
 })

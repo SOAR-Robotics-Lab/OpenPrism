@@ -19,10 +19,6 @@ const MIME_BY_EXT: Record<string, string> = {
   ".svg": "image/svg+xml",
 }
 
-const MAX_INLINE_BYTES = 8 * 1024
-
-const PLOTLY_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="48" height="48"><rect width="64" height="64" rx="8" fill="#1f2937"/><rect x="12" y="38" width="8" height="16" rx="2" fill="#3b82f6"/><rect x="24" y="26" width="8" height="28" rx="2" fill="#10b981"/><rect x="36" y="32" width="8" height="22" rx="2" fill="#f59e0b"/><rect x="48" y="20" width="8" height="34" rx="2" fill="#ef4444"/><line x1="8" y1="56" x2="60" y2="56" stroke="#6b7280" stroke-width="2"/></svg>`
-
 type TextCompleteOptions = {
   consumeLatestImagePath?: (sessionID: string) => string | undefined
   mediaServer?: MediaServer
@@ -110,17 +106,10 @@ export async function inlineLocalImageMarkdown(
     const ext = path.extname(resolvedPath).toLowerCase()
     const mime = MIME_BY_EXT[ext] ?? "image/png"
     const viewerUrl = await registerImageWithServer(mediaServer, resolvedPath, alt, mime)
-    const dataUri = await fileToDataUri(resolvedPath, MAX_INLINE_BYTES)
-
-    let replacement: string
-    if (dataUri) {
-      const linkHref = viewerUrl ?? dataUri
-      replacement = `<a href="${linkHref}" class="external-link" target="_blank" rel="noopener noreferrer"><img src="${dataUri}" alt="${escapeHtmlAttr(alt)}" style="max-width:100%;cursor:zoom-in" /></a>`
-    } else if (viewerUrl) {
-      replacement = `[🖼 ${alt || "View image"}](${viewerUrl})`
-    } else {
-      replacement = `[🖼 ${alt || "View image"}](${source})`
-    }
+    const label = alt || "View image"
+    const replacement = viewerUrl
+      ? `[🖼 ${label}](${viewerUrl})`
+      : `[🖼 ${label}](${source})`
     transformed = transformed.replace(fullMatch, replacement)
   }
 
@@ -129,8 +118,7 @@ export async function inlineLocalImageMarkdown(
 
 function replaceViewerUrls(text: string): string {
   return text.replace(VIEWER_URL_REGEX, (_fullMatch, url: string) => {
-    const iconDataUri = `data:image/svg+xml;base64,${Buffer.from(PLOTLY_ICON_SVG).toString("base64")}`
-    return `<a href="${escapeHtmlAttr(url)}" class="external-link" target="_blank" rel="noopener noreferrer" title="Open interactive chart"><img src="${iconDataUri}" alt="Interactive chart" style="vertical-align:middle;margin-right:4px" /></a> [Open Interactive Chart](${url})`
+    return `[📊 Open Interactive Chart](${url})`
   })
 }
 
@@ -151,30 +139,6 @@ async function registerImageWithServer(
     return mediaServer.viewUrl(id)
   } catch {
     return undefined
-  }
-}
-
-function escapeHtmlAttr(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-}
-
-async function fileToDataUri(filePath: string, maxBytes: number): Promise<string | undefined> {
-  const ext = path.extname(filePath).toLowerCase()
-  const mime = MIME_BY_EXT[ext]
-  if (!mime) {
-    return
-  }
-
-  try {
-    const stat = await fs.stat(filePath)
-    if (stat.size > maxBytes) {
-      return
-    }
-    const data = await fs.readFile(filePath)
-    const base64 = data.toString("base64")
-    return `data:${mime};base64,${base64}`
-  } catch {
-    return
   }
 }
 

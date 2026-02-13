@@ -1,9 +1,29 @@
 # OpenPrism
 
-![](./docs/logo.png)
+<img src="./docs/logo.png" alt="OpenPrism logo" width="360" />
+
+[![Version](https://img.shields.io/badge/version-v0.1.0-369eff?style=flat-square)](https://github.com/SOAR-Robotics-Lab/OpenPrism)
+[![License](https://img.shields.io/badge/license-MIT-black?style=flat-square)](./LICENSE)
+
+![](./docs/struct.png)
+
 **Multi-tier drawing plugin for the OpenCode ecosystem** — bringing Mermaid diagrams, Matplotlib visualizations, Plotly.js interactive charts, and AIGC image generation to your AI coding agent.
 
-OpenPrism extends [OpenCode](https://opencode.ai) with multi-tier visual capabilities, enabling your AI assistant to think, compute, and create visually.
+OpenPrism extends OpenCode with multi-tier visual capabilities, enabling your AI assistant to think, compute, and create visually.
+
+> **Version:** `0.1.0` (current)
+
+---
+
+## Why OpenPrism?
+
+When doing research + engineering with coding agents, pure text is often not enough:
+
+- New system design → you want a **flowchart / architecture diagram**
+- Computation results → you want a **plot / chart**
+- Complex design or user request → you want **AI-generated concept images / mockups**
+
+OpenPrism is built to make “coding agent for research” feel more like a real lab notebook: **text + figures + diagrams**.
 
 ---
 
@@ -13,8 +33,21 @@ OpenPrism extends [OpenCode](https://opencode.ai) with multi-tier visual capabil
 |------|--------|------------|
 | **1** | Mermaid | Architecture diagrams, flowcharts, sequence diagrams, ER diagrams, state machines |
 | **2a** | Matplotlib | Static publication-quality plots — histograms, scatter charts, multi-panel figures |
-| **2b** | Plotly.js | Interactive charts — zoom, pan, hover tooltips, legend toggle, data export |
+| **2b** | Plotly.js | Interactive charts — zoom, pan, hover tooltips, legend toggle, data export *(WIP in Web mode)* |
 | **3** | AIGC (Gemini / OpenRouter) | UI mockups, icons, creative assets, image editing — built-in multi-provider support |
+
+---
+
+## Modes: Web vs CLI
+
+This plugin supports **Web mode** and **CLI mode**.
+
+- **Interactive charts are currently supported only in CLI mode.**
+- **AIGC generation in CLI mode is still unstable / has known issues.**
+
+If you need interactivity today, prefer **CLI mode**. If you need AIGC reliability, prefer **Web mode** for now.
+
+---
 
 ### How It Works
 
@@ -37,33 +70,56 @@ graph LR
     I --> J[Interactive Viewer]
     H --> K[Asset Manager]
     K --> L[.opencode/plots/]
-```
+````
 
 ### Hooks
 
 OpenPrism also installs lifecycle hooks that enhance the agent automatically:
 
-| Hook | Purpose |
-|------|---------|
-| `tool.execute.after` | Auto-detects and renders \`\`\`mermaid blocks in agent output |
-| `experimental.chat.system.transform` | Injects tier-selection guidance into the system prompt |
-| `experimental.session.compacting` | Preserves visual asset summaries during session compaction |
-| `experimental.text.complete` | Embeds inline WebP thumbnails for image display in chat (data URI) |
-| `experimental.chat.messages.transform` | Strips image data URIs before sending to LLM (zero context bloat) |
+| Hook                                   | Purpose                                                            |
+| -------------------------------------- | ------------------------------------------------------------------ |
+| `tool.execute.after`                   | Auto-detects and renders ```mermaid blocks in agent output         |
+| `experimental.chat.system.transform`   | Injects tier-selection guidance into the system prompt             |
+| `experimental.session.compacting`      | Preserves visual asset summaries during session compaction         |
+| `experimental.text.complete`           | Embeds inline WebP thumbnails for image display in chat (data URI) |
+| `experimental.chat.messages.transform` | Strips image data URIs before sending to LLM (zero context bloat)  |
+
+---
+
+## Limitations (current)
+
+Due to OpenCode permission constraints:
+
+1. **Click-to-zoom image may navigate away**, and when you come back the session *may* refresh.
+   **Strongly recommended:** right-click the image and choose **Open in new tab**.
+
+2. **Large image assets may crash the browser**, because we currently have to embed them into context using **base64 data URIs**.
+
+3. When interacting with LLMs, **images are replaced by placeholders**.
+   Generated images **cannot be kept inside LLM context** for now.
+
+4. **Plotly.js interactive viewer is work-in-progress in Web mode.**
+   (Interactive charts currently work in **CLI mode only**.)
+
+We will actively explore submitting PRs to OpenCode to remove these constraints and provide a more ideal experience.
 
 ---
 
 ## Quick Start
 
-### 1. Install
+### Install (recommended right now)
+
+> `npm` registry installation is **work-in-progress**. For now, we recommend installing directly from GitHub.
+
+#### For humans
 
 ```bash
-npm install openprism
+# 1) Install OpenPrism from GitHub
+npm install github:SOAR-Robotics-Lab/OpenPrism
+
+# 2) Enable it in OpenCode
+# Add to opencode.json:
 ```
-
-### 2. Configure OpenCode
-
-Add OpenPrism to your `opencode.json`:
 
 ```json
 {
@@ -72,23 +128,52 @@ Add OpenPrism to your `opencode.json`:
 }
 ```
 
-### 3. (Optional) Install Tier Dependencies
+Then restart OpenCode.
 
-**Tier 1 — Mermaid rendering:**
+#### For AI agents (copy/paste checklist)
+
+* Install the plugin from GitHub:
+
+  ```bash
+  npm install github:SOAR-Robotics-Lab/OpenPrism
+  ```
+* Ensure `opencode.json` contains:
+
+  ```json
+  {
+    "$schema": "https://opencode.ai/config.json",
+    "plugin": ["openprism"]
+  }
+  ```
+* Restart OpenCode session / reload workspace.
+* If the user asks for diagrams/plots/images:
+
+  * Prefer **Tier 1 Mermaid** for structure/process.
+  * Prefer **Tier 2a Matplotlib** for computed plots.
+  * Use **Tier 3 AIGC** when a visual concept/mockup is required.
+  * If the user explicitly requires **interactive charts**, switch to **CLI mode**.
+
+> Installation guide style inspired by: [https://github.com/code-yeongyu/oh-my-opencode](https://github.com/code-yeongyu/oh-my-opencode)
+
+---
+
+## (Optional) Tier Dependencies
+
+### Tier 1 — Mermaid rendering
 
 ```bash
 npm install -g @mermaid-js/mermaid-cli
 ```
 
-**Tier 2a — Matplotlib (static plots):**
+### Tier 2a — Matplotlib (static plots)
 
 ```bash
 pip install matplotlib
 ```
 
-> **Tier 2b — Plotly.js** requires no installation. The library is loaded from CDN when charts are viewed in the browser.
+> **Tier 2b — Plotly.js** requires no installation. The library is loaded from CDN when charts are viewed in the browser. *(Web viewer is WIP; CLI supports interactivity today.)*
 
-**Tier 3 — AIGC Image Generation (built-in, no external MCP required):**
+### Tier 3 — AIGC Image Generation (built-in, no external MCP required)
 
 Set at least one provider API key as an environment variable:
 
@@ -104,13 +189,13 @@ OpenPrism auto-detects available providers. If both keys are set, Gemini is used
 
 **Supported models:**
 
-| Provider | Models | Capabilities |
-|----------|--------|--------------|
-| Gemini | `gemini-2.5-flash-image` (default, fast, 1K) | Generate, edit, restore |
-| Gemini | `gemini-3-pro-image-preview` (high quality, up to 4K) | Generate, edit, restore |
-| OpenRouter | `bytedance-seed/seedream-4.5` (default) | Generate only |
+| Provider   | Models                                                | Capabilities            |
+| ---------- | ----------------------------------------------------- | ----------------------- |
+| Gemini     | `gemini-2.5-flash-image` (default, fast, 1K)          | Generate, edit, restore |
+| Gemini     | `gemini-3-pro-image-preview` (high quality, up to 4K) | Generate, edit, restore |
+| OpenRouter | `bytedance-seed/seedream-4.5` (default)               | Generate only           |
 
-> **Note**: You can also pass `model`, `aspectRatio`, `resolution`, and `style` parameters to the `generate_image` tool for fine-grained control.
+> You can also pass `model`, `aspectRatio`, `resolution`, and `style` parameters to the `generate_image` tool for fine-grained control.
 
 ---
 
@@ -120,246 +205,248 @@ OpenPrism auto-detects available providers. If both keys are set, Gemini is used
 
 Renders Mermaid diagram source to SVG, PNG, or PDF.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `source` | string | yes | Mermaid diagram source code |
-| `format` | `"svg"` \| `"png"` \| `"pdf"` | no | Output format (default: `svg`) |
-| `theme` | `"default"` \| `"dark"` \| `"forest"` \| `"neutral"` | no | Mermaid theme |
-| `description` | string | no | Human-readable description for asset tracking |
+| Parameter     | Type                                              | Required | Description                                   |
+| ------------- | ------------------------------------------------- | -------- | --------------------------------------------- |
+| `source`      | string                                            | yes      | Mermaid diagram source code                   |
+| `format`      | `"svg"` | `"png"` | `"pdf"`                       | no       | Output format (default: `svg`)                |
+| `theme`       | `"default"` | `"dark"` | `"forest"` | `"neutral"` | no       | Mermaid theme                                 |
+| `description` | string                                            | no       | Human-readable description for asset tracking |
 
 ### `analyze_structure`
 
 Scans the project directory and generates a Mermaid architecture diagram or ASCII tree.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `format` | `"mermaid"` \| `"text"` | no | Output format (default: `mermaid`) |
-| `maxDepth` | number | no | Maximum scan depth (default: `4`) |
-| `targetPath` | string | no | Relative path to analyze (default: project root) |
+| Parameter    | Type                   | Required | Description                                      |
+| ------------ | ---------------------- | -------- | ------------------------------------------------ |
+| `format`     | `"mermaid"` | `"text"` | no       | Output format (default: `mermaid`)               |
+| `maxDepth`   | number                 | no       | Maximum scan depth (default: `4`)                |
+| `targetPath` | string                 | no       | Relative path to analyze (default: project root) |
 
 ### `plot_data`
 
 Executes a Python/Matplotlib script and saves the generated plot.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `script` | string | yes | Python script using `matplotlib.pyplot` |
-| `description` | string | no | Description for asset tracking |
-| `format` | `"png"` \| `"svg"` \| `"pdf"` | no | Output format (default: `png`) |
-| `dpi` | number | no | DPI for raster output (default: `150`) |
+| Parameter     | Type                        | Required | Description                             |
+| ------------- | --------------------------- | -------- | --------------------------------------- |
+| `script`      | string                      | yes      | Python script using `matplotlib.pyplot` |
+| `description` | string                      | no       | Description for asset tracking          |
+| `format`      | `"png"` | `"svg"` | `"pdf"` | no       | Output format (default: `png`)          |
+| `dpi`         | number                      | no       | DPI for raster output (default: `150`)  |
 
 The plugin automatically:
-- Injects `matplotlib.use('Agg')` for headless rendering
-- Appends `plt.savefig(...)` with the configured output path
-- Strips any `plt.show()` calls from user scripts
-- Detects `.venv`, conda, or system Python environments
 
-### `plot_interactive`
+* Injects `matplotlib.use('Agg')` for headless rendering
+* Appends `plt.savefig(...)` with the configured output path
+* Strips any `plt.show()` calls from user scripts
+* Detects `.venv`, conda, or system Python environments
+
+### `plot_interactive` *(WIP in Web mode; works in CLI mode)*
 
 Creates an interactive Plotly.js chart and returns a viewer URL that opens in the browser.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `spec` | string | yes | Plotly JSON spec as a string (must include `data`, `layout`, optional `config`) |
-| `description` | string | no | Description for asset tracking |
-| `data` | string | no | Plotly trace array as JSON string (used when `spec.data` is missing) |
-
-The chart opens as a fully interactive HTML page via the built-in MediaServer:
-- Zoom, pan, box/lasso select
-- Hover tooltips with data values
-- Legend toggle to show/hide traces
-- Export to PNG via the Plotly toolbar
-
-**When to use Matplotlib vs Plotly:**
-
-| Scenario | Tool |
-|----------|------|
-| Data requires backend computation (read files, run algorithms) | `plot_data` (Matplotlib) |
-| Data is available in conversation context | `plot_interactive` (Plotly) |
-| Static publication-quality figure | `plot_data` (Matplotlib) |
-| User wants to zoom, hover, or explore data | `plot_interactive` (Plotly) |
+| Parameter     | Type   | Required | Description                                                                     |
+| ------------- | ------ | -------- | ------------------------------------------------------------------------------- |
+| `spec`        | string | yes      | Plotly JSON spec as a string (must include `data`, `layout`, optional `config`) |
+| `description` | string | no       | Description for asset tracking                                                  |
+| `data`        | string | no       | Plotly trace array as JSON string (used when `spec.data` is missing)            |
 
 ### `generate_image`
 
 Generates or edits images via built-in AIGC providers (Gemini, OpenRouter).
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `operation` | `"generate"` \| `"edit"` \| `"continue_editing"` \| `"restore"` | yes | AIGC operation type |
-| `prompt` | string | yes | Text prompt for generation/editing |
-| `sourcePath` | string | no | Source image path (required for `edit`/`restore`) |
-| `referenceImages` | string[] | no | Reference image paths for style guidance |
-| `model` | string | no | Provider model ID (e.g. `gemini-2.5-flash-image`, `bytedance-seed/seedream-4.5`) |
-| `aspectRatio` | string | no | Aspect ratio (e.g. `1:1`, `16:9`, `4:3`) |
-| `resolution` | string | no | Output resolution — `1K`, `2K`, or `4K` (Gemini Pro only) |
-| `style` | string | no | Style hint (e.g. `photorealistic`, `cartoon`, `watercolor`) |
-
-Provider is auto-detected from environment variables (`GEMINI_API_KEY` or `OPENROUTER_API_KEY`). Gemini supports all operations; OpenRouter supports generation only.
+| Parameter         | Type                                                         | Required | Description                                                 |
+| ----------------- | ------------------------------------------------------------ | -------- | ----------------------------------------------------------- |
+| `operation`       | `"generate"` | `"edit"` | `"continue_editing"` | `"restore"` | yes      | AIGC operation type                                         |
+| `prompt`          | string                                                       | yes      | Text prompt for generation/editing                          |
+| `sourcePath`      | string                                                       | no       | Source image path (required for `edit`/`restore`)           |
+| `referenceImages` | string[]                                                     | no       | Reference image paths for style guidance                    |
+| `model`           | string                                                       | no       | Provider model ID                                           |
+| `aspectRatio`     | string                                                       | no       | Aspect ratio (e.g. `1:1`, `16:9`, `4:3`)                    |
+| `resolution`      | string                                                       | no       | Output resolution — `1K`, `2K`, or `4K` (Gemini Pro only)   |
+| `style`           | string                                                       | no       | Style hint (e.g. `photorealistic`, `cartoon`, `watercolor`) |
 
 ---
 
-## Usage Examples
+## About the authors / credits
 
-### Tier 1: Mermaid Diagrams
-
-Simply include Mermaid code blocks in your conversation with the agent — OpenPrism will auto-render them:
-
-![](./docs/show_struct.png)
-
-### Tier 2a: Matplotlib Plots (Static)
-
-For heavy computation or publication-quality figures:
-
-```
-User: Plot the distribution of response times from our benchmark.
-
-Agent: (calls plot_data with script)
-    import matplotlib.pyplot as plt
-    import numpy as np
-
-    times = np.random.lognormal(mean=2, sigma=0.5, size=1000)
-    plt.figure(figsize=(10, 6))
-    plt.hist(times, bins=50, edgecolor='black', alpha=0.7)
-    plt.xlabel('Response Time (ms)')
-    plt.ylabel('Frequency')
-    plt.title('API Response Time Distribution')
-    plt.axvline(np.median(times), color='red', linestyle='--', label=f'Median: {np.median(times):.1f}ms')
-    plt.legend()
-```
-
-### Tier 2b: Plotly.js Charts (Interactive)
-
-For data exploration with zoom, hover, and toggle:
-
-```
-User: Compare the monthly sales of our three product lines.
-
-Agent: (calls plot_interactive with spec)
-    {
-      "data": [
-        {"x": ["Jan","Feb","Mar","Apr"], "y": [120,135,148,162], "name": "Product A", "type": "scatter"},
-        {"x": ["Jan","Feb","Mar","Apr"], "y": [90,95,102,88],   "name": "Product B", "type": "scatter"},
-        {"x": ["Jan","Feb","Mar","Apr"], "y": [45,52,58,71],    "name": "Product C", "type": "scatter"}
-      ],
-      "layout": {"title": "Monthly Sales Comparison", "xaxis": {"title": "Month"}, "yaxis": {"title": "Units"}}
-    }
-
-→ Opens an interactive chart in the browser where you can hover for values, toggle series, and zoom.
-```
-
-### Tier 3: AIGC Image Generation
-
-With an API key configured, the agent can generate creative assets natively:
-
-![](./docs/AIGC.png)
----
-
-## Architecture
-
-
-![](./docs/stuct.png)
-
-This structure figure is generated by this plugin!
-
-
-```
-OpenPrism/
-├── src/
-│   ├── index.ts                          # Plugin entry point — exports OpenPrismPlugin
-│   ├── types.ts                          # Shared type definitions for all tiers
-│   ├── hooks/
-│   │   ├── mermaid-renderer.ts           # Auto-renders mermaid blocks in agent output
-│   │   ├── system-prompt.ts              # Injects tier-selection guidance into system prompt
-│   │   ├── session-compaction.ts         # Preserves visual asset summaries during compaction
-│   │   ├── text-complete-inline-image.ts # Embeds inline WebP thumbnails for image display
-│   │   └── strip-images-transform.ts     # Strips image data URIs before LLM sees messages
-│   ├── tools/
-│   │   ├── render-mermaid.ts             # Tier 1: Mermaid render
-│   │   ├── analyze-structure.ts          # Tier 1: Project structure → diagram
-│   │   ├── plot-data.ts                  # Tier 2a: Matplotlib execution
-│   │   ├── plot-interactive.ts           # Tier 2b: Plotly.js interactive charts
-│   │   └── generate-image.ts             # Tier 3: AIGC image generation (native providers)
-│   ├── providers/
-│   │   ├── types.ts                      # AIGCProvider interface and config types
-│   │   ├── gemini.ts                     # Google Gemini REST API provider
-│   │   ├── openrouter.ts                 # OpenRouter API provider (Seedream, etc.)
-│   │   └── index.ts                      # Provider registry and auto-detection factory
-│   ├── renderers/
-│   │   ├── mermaid-ssr.ts                # Mermaid CLI wrapper (mmdc)
-│   │   └── matplotlib-bridge.ts          # Python subprocess bridge
-│   └── utils/
-│       ├── file-manager.ts               # Asset tracking, cleanup, manifest
-│       ├── media-server.ts               # HTTP server for rich media viewing (Plotly, images, video)
-│       ├── viewer-templates.ts           # HTML templates for image/video/Plotly viewers
-│       ├── terminal-image.ts             # Kitty/iTerm2 image protocol support
-│       └── thumbnail.ts                  # WebP thumbnail generation via Python PIL
-├── tests/                                # Vitest — 137 tests, mirrors src/ structure
-├── docs/plan.md                          # Development roadmap (Chinese)
-├── package.json
-├── tsconfig.json
-├── LICENSE
-└── README.md
-```
+* **SOAR-LAB** is a robotics research team led by **Dr. Xu Hao** (SOAR-LAB, Flying General Intelligence Lab). Team members are currently mainly based at **Beihang University**.
+* This project is co-developed with the **Mondo Robotics** engineering team, and funded by Mondo Robotics.
+* Motivation: while tuning learning experiments, repeatedly digging through the filesystem for plots and artifacts is painful. Visualization is not a “nice-to-have” — it is essential for research workflows inside coding agents. OpenPrism was built (and open-sourced) to make that loop dramatically faster.
+* Need help or found a bug? Please open an issue. Dr. Xu plans to deploy an agent to automatically collect feedback and turn it into actionable improvements.
+* 100% vibe coding generated. Manual coding is dead. Vibe coding lives forever.
 
 ---
 
-## Prerequisites
+## Open source
 
-| Requirement | Version | Required For |
-|-------------|---------|--------------|
-| Node.js | >= 18 | Core plugin |
-| TypeScript | >= 5.0 | Build |
-| @mermaid-js/mermaid-cli | >= 11.0 | Tier 1 (optional) |
-| Python 3 | >= 3.8 | Tier 2a (optional) |
-| matplotlib | latest | Tier 2a (optional) |
-| GEMINI_API_KEY | — | Tier 3 via Gemini (optional) |
-| OPENROUTER_API_KEY | — | Tier 3 via OpenRouter (optional) |
+Repo: [https://github.com/SOAR-Robotics-Lab/OpenPrism](https://github.com/SOAR-Robotics-Lab/OpenPrism)
 
 ---
 
-## Development Roadmap
+## License
 
-The full development plan is documented in [`docs/plan.md`](docs/plan.md) (Chinese).
-
-### Phase 1: Infrastructure and Mermaid Core (Weeks 1-2)
-- Plugin scaffold and build pipeline
-- Mermaid SSR rendering via `mermaid-cli`
-- `tool.execute.after` hook for auto-rendering
-- System prompt injection for tier-aware guidance
-
-### Phase 2: Data Visualization Pipeline (Weeks 3-4)
-- Python execution sandbox with environment detection
-- Matplotlib bridge with Agg backend injection
-- Static file serving integration
-- Session compaction hooks for visual state preservation
-
-### Phase 3: Native AIGC Providers (Weeks 5-6)
-- Built-in multi-provider AIGC system (no external MCP dependency)
-- Google Gemini provider — generation, editing, restore via REST API
-- OpenRouter provider — generation via Seedream and other models
-- Auto-detection from environment variables with explicit override support
-
-### Phase 4: Unified Interface and Optimization (Weeks 7-8)
-- Unified `/draw` command with tier selection
-- Cross-tier orchestration (Mermaid -> Matplotlib pipeline)
-- Automatic cleanup of expired assets
-- Performance optimization and resource management
+MIT
 
 ---
 
-## Configuration
+# OpenPrism（中文）
 
-OpenPrism uses sensible defaults that can be customized:
+<img src="./docs/logo.png" alt="OpenPrism logo" width="360" />
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Output directory | `.opencode/plots` | Where generated assets are stored |
-| Max output size | 500 MB | Triggers auto-cleanup when exceeded |
-| Cleanup after | 30 days | Age threshold for expired assets |
-| Mermaid enabled | `true` | Enable Tier 1 |
-| Matplotlib enabled | `true` | Enable Tier 2a |
-| Plotly enabled | `true` | Enable Tier 2b |
-| AIGC enabled | `true` | Enable Tier 3 |
+![](./docs/struct.png)
+
+**面向 OpenCode 生态的多层级绘图插件** ——把 Mermaid 结构图、Matplotlib 论文级可视化、Plotly.js 交互图表，以及 AIGC 图像生成带到你的 AI coding agent 里。
+
+OpenPrism 为 OpenCode 增强多层级可视化能力，让你的 AI 助手不仅能“算”和“写”，还能“画”出来。
+
+> **版本：** `0.1.0`（当前）
+
+---
+
+## 为什么要做 OpenPrism？
+
+科研 + 工程里，纯文字经常不够用：
+
+* 新系统设计 → 需要 **流程图 / 架构图**
+* 计算结果 → 需要 **曲线图 / 统计图**
+* 复杂设计或用户需求 → 需要 **AI 效果图 / 概念图**
+
+OpenPrism 目标是把 coding agent 变成更像实验室笔记本：**文字 + 图 + 图表 + 结构图**。
+
+---
+
+## 功能特性
+
+| 层级     | 引擎                        | 能力                                  |
+| ------ | ------------------------- | ----------------------------------- |
+| **1**  | Mermaid                   | 架构图、流程图、时序图、ER 图、状态机                |
+| **2a** | Matplotlib                | 静态论文级绘图——直方图、散点图、多子图                |
+| **2b** | Plotly.js                 | 交互图表——缩放/平移/悬停提示/图例开关/导出（Web 模式开发中） |
+| **3**  | AIGC（Gemini / OpenRouter） | UI 草图、图标、创意素材、图像编辑——内置多提供方          |
+
+---
+
+## 模式说明：Web / CLI
+
+本插件支持 **Web 模式** 与 **CLI 模式**。
+
+* **可交互数据图表目前仅在 CLI 模式可用。**
+* **CLI 模式下的 AIGC 生成仍有问题（不稳定/已知缺陷）。**
+
+如果你现在就需要交互图表，优先使用 **CLI 模式**；如果你更依赖 AIGC 的稳定性，建议暂时优先使用 **Web 模式**。
+
+---
+
+## 当前限制（limitation）
+
+由于 OpenCode 本身的权限限制，导致：
+
+1）图片单击放大时会跳转，并且返回时有可能会话被刷新；**强烈建议：右键 Open in new tab 放大查看**。
+2）图片资源过大可能会引起浏览器崩溃，这是因为我们不得不用 base64 嵌入在上下文中。
+3）跟 LLM 交互时图片会被替换为 placeholder，暂时不支持把生成的图片也放入上下文。
+4）Plotly.js 的可交互插件 **Web 模式 work-in-progress**（CLI 模式已可用）。
+
+作者会积极探索给 OpenCode 提 PR 解决限制，以获得更理想的体验！
+
+---
+
+## 快速开始
+
+### 安装（当前推荐）
+
+> 通过 `npm` 官方包管理器直接安装 **work-in-progress**。暂时推荐使用 **npm GitHub 安装**。
+
+#### 给人类用户（for human）
+
+```bash
+# 1) 从 GitHub 安装 OpenPrism
+npm install github:SOAR-Robotics-Lab/OpenPrism
+
+# 2) 在 OpenCode 配置中启用
+# 在 opencode.json 里加入：
+```
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["openprism"]
+}
+```
+
+然后重启 OpenCode。
+
+#### 给 AI Agent（for AI agent，一键清单）
+
+* 从 GitHub 安装：
+
+  ```bash
+  npm install github:SOAR-Robotics-Lab/OpenPrism
+  ```
+* 确保 `opencode.json` 包含：
+
+  ```json
+  {
+    "$schema": "https://opencode.ai/config.json",
+    "plugin": ["openprism"]
+  }
+  ```
+* 重启 OpenCode 会话/刷新工作区。
+* 当用户提出“画图/可视化/效果图”需求时：
+
+  * 结构/流程优先用 **Tier 1 Mermaid**
+  * 需要计算再画优先用 **Tier 2a Matplotlib**
+  * 需要概念图/素材优先用 **Tier 3 AIGC**
+  * 如果用户明确要求 **可交互图表**：切换到 **CLI 模式**
+
+> 安装教程风格参考：[https://github.com/code-yeongyu/oh-my-opencode](https://github.com/code-yeongyu/oh-my-opencode)
+
+---
+
+##（可选）各层依赖
+
+### Tier 1 — Mermaid 渲染
+
+```bash
+npm install -g @mermaid-js/mermaid-cli
+```
+
+### Tier 2a — Matplotlib（静态图）
+
+```bash
+pip install matplotlib
+```
+
+> **Tier 2b — Plotly.js** 无需安装，浏览器端通过 CDN 加载。（Web 交互 Viewer 仍在开发中；CLI 已可交互。）
+
+### Tier 3 — AIGC 图像生成（内置，无需外部 MCP）
+
+至少配置一个 API Key 环境变量：
+
+```bash
+# 方案 A：Google Gemini（推荐：支持生成 + 编辑）
+export GEMINI_API_KEY="your-gemini-api-key"
+
+# 方案 B：OpenRouter（支持生成，如 Seedream 等）
+export OPENROUTER_API_KEY="your-openrouter-api-key"
+```
+
+OpenPrism 会自动检测可用提供方；如果两者都配置，默认优先 Gemini。
+
+---
+
+## 作者说明 / 致谢
+
+* **SOAR-LAB（飞行通用智能实验室）** 是由 **徐浩博士** 领衔的机器人科研团队，成员目前主要位于 **北京航空航天大学**。
+* 本项目由徐博士与 **妙动（Mondo Robotics）** 科技团队联合开发，并由妙动科技提供资助与工程支持。
+* 项目缘起：在调 learning/实验时反复翻文件系统找结果极其低效——而在 coding agent 场景下，“随手可视化”对科研是刚需。OpenPrism 希望把这件事变得顺滑：该画就画，该算就算，结果就地展示。
+* 如遇问题请直接提 issue；徐博士计划部署一个 agent 自动收集反馈、归纳共性问题，并持续迭代改进。
+* 本项目 100% vibe coding 生成：古法手动编程已死，vibe coding 万岁！
+
+---
+
+## 开源地址
+
+[https://github.com/SOAR-Robotics-Lab/OpenPrism](https://github.com/SOAR-Robotics-Lab/OpenPrism)
 
 ---
 

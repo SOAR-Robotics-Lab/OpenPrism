@@ -8,10 +8,21 @@ import type {
 const OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
 const DATA_URL_PATTERN = /data:(image\/[a-zA-Z0-9.+-]+);base64,([^\s"']+)/
 
+const TEXT_AND_IMAGE_MODELS = new Set([
+  "google/gemini-2.5-flash-image-preview",
+  "google/gemini-3-pro-image-preview",
+])
+
+interface OpenRouterImageEntry {
+  type?: string
+  image_url?: { url?: string }
+}
+
 interface OpenRouterResponse {
   choices?: Array<{
     message?: {
       content?: string | Array<{ type?: string; text?: string; image_url?: { url?: string } }>
+      images?: OpenRouterImageEntry[]
     }
   }>
   error?: {
@@ -19,9 +30,14 @@ interface OpenRouterResponse {
   }
 }
 
+interface OpenRouterImageConfig {
+  aspect_ratio?: string
+  image_size?: string
+}
+
 export class OpenRouterProvider implements AIGCProvider {
   readonly name = "openrouter"
-  readonly models = ["bytedance-seed/seedream-4.5"]
+  readonly models = ["bytedance-seed/seedream-4.5", "google/gemini-3-pro-image-preview"]
 
   private readonly apiKey?: string
   private readonly defaultModel?: string
@@ -43,6 +59,18 @@ export class OpenRouterProvider implements AIGCProvider {
 
     const model = options.model ?? this.defaultModel ?? "bytedance-seed/seedream-4.5"
     const prompt = this.buildPrompt(options)
+    const modalities = TEXT_AND_IMAGE_MODELS.has(model) ? ["image", "text"] : ["image"]
+
+    const body: Record<string, unknown> = {
+      model,
+      modalities,
+      messages: [{ role: "user", content: prompt }],
+    }
+
+    const imageConfig = this.buildImageConfig(options)
+    if (imageConfig) {
+      body.image_config = imageConfig
+    }
 
     const response = await fetch(OPENROUTER_ENDPOINT, {
       method: "POST",
@@ -50,18 +78,18 @@ export class OpenRouterProvider implements AIGCProvider {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model,
-        modalities: ["image"],
-        messages: [{ role: "user", content: prompt }],
-      }),
+      body: JSON.stringify(body),
     })
 
-    const payload = (await response.json()) as OpenRouterResponse
+    const payload = await this.parseResponse(response)
 
     if (!response.ok) {
-      const message = payload.error?.message ?? response.statusText
+      const message = payload?.error?.message ?? response.statusText
       throw new Error(`OpenRouter API error: ${message}`)
+    }
+
+    if (!payload) {
+      throw new Error("OpenRouter API returned an empty or unparseable response.")
     }
 
     const image = this.extractImage(payload)
@@ -76,6 +104,19 @@ export class OpenRouterProvider implements AIGCProvider {
     }
   }
 
+  private async parseResponse(response: Response): Promise<OpenRouterResponse | null> {
+    try {
+      const text = await response.text()
+      const trimmed = text.trim()
+      if (!trimmed) {
+        return null
+      }
+      return JSON.parse(trimmed) as OpenRouterResponse
+    } catch {
+      return null
+    }
+  }
+
   private resolveApiKey(): string | undefined {
     return this.apiKey ?? process.env.OPENROUTER_API_KEY
   }
@@ -87,19 +128,40 @@ export class OpenRouterProvider implements AIGCProvider {
       directives.push(`Style: ${options.style}`)
     }
 
-    if (options.aspectRatio) {
-      directives.push(`Aspect ratio: ${options.aspectRatio}`)
-    }
-
-    if (options.resolution) {
-      directives.push(`Resolution target: ${options.resolution}`)
-    }
-
     return directives.join("\n")
   }
 
+  private buildImageConfig(options: AIGCGenerateOptions): OpenRouterImageConfig | undefined {
+    const config: OpenRouterImageConfig = {}
+    let hasConfig = false
+
+    if (options.aspectRatio) {
+      config.aspect_ratio = options.aspectRatio
+      hasConfig = true
+    }
+
+    if (options.resolution) {
+      config.image_size = options.resolution
+      hasConfig = true
+    }
+
+    return hasConfig ? config : undefined
+  }
+
   private extractImage(payload: OpenRouterResponse): { mimeType: string; data: Buffer } | null {
-    const content = payload.choices?.[0]?.message?.content
+    const message = payload.choices?.[0]?.message
+
+    if (message?.images?.length) {
+      for (const entry of message.images) {
+        const url = entry.image_url?.url
+        if (url) {
+          const parsed = this.fromDataUrl(url)
+          if (parsed) return parsed
+        }
+      }
+    }
+
+    const content = message?.content
 
     if (typeof content === "string") {
       return this.fromDataUrl(content)
@@ -108,14 +170,10 @@ export class OpenRouterProvider implements AIGCProvider {
     if (Array.isArray(content)) {
       for (const part of content) {
         const textMatch = part.text ? this.fromDataUrl(part.text) : null
-        if (textMatch) {
-          return textMatch
-        }
+        if (textMatch) return textMatch
 
         const urlMatch = part.image_url?.url ? this.fromDataUrl(part.image_url.url) : null
-        if (urlMatch) {
-          return urlMatch
-        }
+        if (urlMatch) return urlMatch
       }
     }
 

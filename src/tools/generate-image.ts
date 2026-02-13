@@ -5,7 +5,32 @@ import type { AIGCProvider } from "../providers/types.js"
 import type { FileManager } from "../utils/file-manager.js"
 import type { AIGCOperation } from "../types.js"
 
-export function createGenerateImageTool(fileManager: FileManager, provider: AIGCProvider | null) {
+function resolveProvider(providers: AIGCProvider[], model: string | undefined): AIGCProvider | null {
+  if (!providers.length) {
+    return null
+  }
+
+  if (model) {
+    const match = providers.find((p) => p.models.includes(model))
+    if (match) {
+      return match
+    }
+  }
+
+  return providers[0] ?? null
+}
+
+export function createGenerateImageTool(fileManager: FileManager, provider: AIGCProvider | null): ReturnType<typeof tool>
+export function createGenerateImageTool(fileManager: FileManager, providers: AIGCProvider[]): ReturnType<typeof tool>
+export function createGenerateImageTool(
+  fileManager: FileManager,
+  providerOrProviders: AIGCProvider | AIGCProvider[] | null,
+) {
+  const providers: AIGCProvider[] = Array.isArray(providerOrProviders)
+    ? providerOrProviders
+    : providerOrProviders
+      ? [providerOrProviders]
+      : []
   return tool({
     description:
       "Generate or edit images via built-in AIGC providers (Gemini/OpenRouter). Supports prompt-based generation, image edits, and provider-specific model controls.",
@@ -43,6 +68,7 @@ export function createGenerateImageTool(fileManager: FileManager, provider: AIGC
     },
     async execute(args, context) {
       const operation = args.operation as AIGCOperation
+      const provider = resolveProvider(providers, args.model)
 
       if (!provider) {
         return [

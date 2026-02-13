@@ -10,7 +10,7 @@ import { createAnalyzeStructureTool } from "./tools/analyze-structure.js"
 import { createPlotDataTool } from "./tools/plot-data.js"
 import { createPlotInteractiveTool } from "./tools/plot-interactive.js"
 import { createGenerateImageTool } from "./tools/generate-image.js"
-import { createProvider } from "./providers/index.js"
+import { createAllProviders } from "./providers/index.js"
 
 import { createMermaidAfterHook } from "./hooks/mermaid-renderer.js"
 import { createSystemPromptHook } from "./hooks/system-prompt.js"
@@ -24,7 +24,7 @@ export const OpenPrismPlugin: Plugin = async (ctx) => {
   const latestImageBySession = new Map<string, string>()
   const projectRoot = path.resolve(ctx.directory)
   const mediaServer = new MediaServer(projectRoot)
-  const aigcProvider = createProvider(config.aigcProvider)
+  const aigcProviders = createAllProviders(config.aigcProvider)
 
   await fileManager.ensureDir()
 
@@ -44,7 +44,7 @@ export const OpenPrismPlugin: Plugin = async (ctx) => {
   }
 
   if (config.aigcEnabled) {
-    tools["generate_image"] = createGenerateImageTool(fileManager, aigcProvider)
+    tools["generate_image"] = createGenerateImageTool(fileManager, aigcProviders)
   }
 
   return {

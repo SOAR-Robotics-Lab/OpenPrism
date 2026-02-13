@@ -104,11 +104,15 @@ export class GeminiProvider implements AIGCProvider {
       }),
     })
 
-    const payload = (await response.json()) as GeminiResponse
+    const payload = await this.parseResponse(response)
 
     if (!response.ok) {
-      const message = payload.error?.message ?? response.statusText
+      const message = payload?.error?.message ?? response.statusText
       throw new Error(`Gemini API error: ${message}`)
+    }
+
+    if (!payload) {
+      throw new Error("Gemini API returned an empty or unparseable response.")
     }
 
     const inlineData = payload.candidates?.[0]?.content?.parts?.find((part) => part.inlineData?.data)
@@ -122,6 +126,19 @@ export class GeminiProvider implements AIGCProvider {
       imageData: Buffer.from(inlineData.data, "base64"),
       mimeType: inlineData.mimeType ?? "image/png",
       metadata: { model },
+    }
+  }
+
+  private async parseResponse(response: Response): Promise<GeminiResponse | null> {
+    try {
+      const text = await response.text()
+      const trimmed = text.trim()
+      if (!trimmed) {
+        return null
+      }
+      return JSON.parse(trimmed) as GeminiResponse
+    } catch {
+      return null
     }
   }
 

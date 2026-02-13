@@ -6,6 +6,9 @@ import type { MediaServer } from "../utils/media-server.js"
 
 const SUPPORTED_IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"])
 
+// ~4MB raw → ~5.3MB base64. Beyond this, marked's regex tokenizer overflows the call stack.
+const MAX_INLINE_FILE_BYTES = 4 * 1024 * 1024
+
 const MARKDOWN_IMAGE_REGEX = /!\[([^\]]*)\]\(([^)\s]+)\)/g
 
 const VIEWER_URL_REGEX = /ViewerURL:\s*(http:\/\/127\.0\.0\.1:\d+\/view\/[^\s]+)/g
@@ -32,9 +35,11 @@ export function createInlineImageTextCompleteHook(
   const resolvedProjectDir = path.resolve(projectDir)
 
   return async (input, output) => {
+    const latestImagePath = options?.consumeLatestImagePath?.(input.sessionID)
+
     const textWithFallback = maybeAppendFallbackImageMarkdown(
       output.text,
-      options?.consumeLatestImagePath?.(input.sessionID),
+      latestImagePath,
       resolvedProjectDir,
     )
 
@@ -43,6 +48,7 @@ export function createInlineImageTextCompleteHook(
       resolvedProjectDir,
       options?.mediaServer,
       resolvedProjectDir,
+      latestImagePath,
     )
 
   }
@@ -53,6 +59,7 @@ export async function inlineLocalImageMarkdown(
   allowedRoot: string,
   mediaServer?: MediaServer,
   projectDir?: string,
+  fallbackImagePath?: string,
 ): Promise<string> {
   let transformed = text
 
@@ -80,9 +87,6 @@ export async function inlineLocalImageMarkdown(
     }
 
     const candidates = resolveSourcePaths(source, projectDir)
-    if (candidates.length === 0) {
-      continue
-    }
 
     let resolvedPath: string | undefined
     for (const candidate of candidates) {
@@ -97,6 +101,21 @@ export async function inlineLocalImageMarkdown(
       if (exists) {
         resolvedPath = candidate
         break
+      }
+    }
+
+    // If the original path couldn't be resolved but we have a fallback from the
+    // tool.execute.after hook (latestImagePath), use it instead. This handles the
+    // case where the LLM writes a wrong/hallucinated path (e.g. ~/Downloads/...)
+    // but the AIGC tool already recorded the correct output path.
+    if (!resolvedPath && fallbackImagePath) {
+      const fbResolved = path.resolve(fallbackImagePath)
+      if (
+        isUnderAllowedRoot(fbResolved, allowedRoot) &&
+        SUPPORTED_IMAGE_EXTENSIONS.has(path.extname(fbResolved).toLowerCase()) &&
+        (await fileExists(fbResolved))
+      ) {
+        resolvedPath = fbResolved
       }
     }
 
@@ -133,6 +152,10 @@ function escapeHtml(text: string): string {
 
 async function readFileAsDataUri(filePath: string, mime: string): Promise<string | undefined> {
   try {
+    const stat = await fs.stat(filePath)
+    if (stat.size > MAX_INLINE_FILE_BYTES) {
+      return undefined
+    }
     const buf = await fs.readFile(filePath)
     return `data:${mime};base64,${buf.toString("base64")}`
   } catch {

@@ -411,7 +411,7 @@ describe("createInlineImageTextCompleteHook", () => {
     expect(output.text).not.toContain("OpenPrism image")
   })
 
-  it("skips images when file does not exist on disk", async () => {
+  it("skips images when file does not exist on disk and no fallback", async () => {
     const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
     await fs.mkdir(outputDir, { recursive: true })
 
@@ -422,6 +422,51 @@ describe("createInlineImageTextCompleteHook", () => {
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
     expect(output.text).toBe(`![plot](${missingPath})`)
+  })
+
+  it("uses fallback image path when LLM writes an unresolvable path", async () => {
+    const outputDir = path.join(tempRoot, ".opencode", "plots", "aigc")
+    await fs.mkdir(outputDir, { recursive: true })
+
+    const correctPath = path.join(outputDir, "aigc-generated.png")
+    await fs.writeFile(correctPath, PNG_BYTES)
+
+    const wrongPath = "/home/user/Downloads/nanobanana-images/openprism-architecture.png"
+
+    const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots", {
+      consumeLatestImagePath: () => correctPath,
+    })
+
+    const output = { text: `AIGC image generated.\n\n![OpenPrism Architecture](${wrongPath})` }
+    await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
+
+    expect(output.text).toContain("<img src=\"data:image/png;base64,")
+    expect(output.text).toContain("OpenPrism Architecture")
+    expect(output.text).not.toContain(wrongPath)
+  })
+
+  it("uses fallback image path when LLM writes a path outside allowed root", async () => {
+    const outputDir = path.join(tempRoot, ".opencode", "plots", "aigc")
+    await fs.mkdir(outputDir, { recursive: true })
+
+    const correctPath = path.join(outputDir, "aigc-output.png")
+    await fs.writeFile(correctPath, PNG_BYTES)
+
+    const outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), "openprism-outside-aigc-"))
+    const outsidePath = path.join(outsideDir, "hallucinated.png")
+    await fs.writeFile(outsidePath, PNG_BYTES)
+
+    const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots", {
+      consumeLatestImagePath: () => correctPath,
+    })
+
+    const output = { text: `![generated](${outsidePath})` }
+    await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
+
+    expect(output.text).toContain("<img src=\"data:image/png;base64,")
+    expect(output.text).not.toContain(outsidePath)
+
+    await fs.rm(outsideDir, { recursive: true, force: true })
   })
 
   it("leaves already-inlined data URIs unchanged", async () => {
@@ -473,6 +518,32 @@ describe("createInlineImageTextCompleteHook", () => {
 
     const b64 = PNG_BYTES.toString("base64")
     expect(output.text).toBe(`<a href="${fakeViewerUrl}" target="_blank" rel="noopener noreferrer"><img src="data:image/png;base64,${b64}" alt="chart"/></a>`)
+  })
+
+  it("falls back to viewer link for images exceeding 4MB inline limit", async () => {
+    const outputDir = path.join(tempRoot, ".opencode", "plots", "aigc")
+    await fs.mkdir(outputDir, { recursive: true })
+
+    const largePath = path.join(outputDir, "huge.png")
+    await fs.writeFile(largePath, Buffer.alloc(5 * 1024 * 1024))
+
+    const fakeViewerUrl = "http://127.0.0.1:12345/view/large-id"
+    const fakeMediaServer = {
+      ensureStarted: async () => {},
+      registerMedia: () => {},
+      viewUrl: () => fakeViewerUrl,
+      mediaUrl: () => "http://127.0.0.1:12345/api/media/large-id",
+    } as unknown as import("../src/utils/media-server.ts").MediaServer
+
+    const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots", {
+      mediaServer: fakeMediaServer,
+    })
+    const output = { text: `![4k image](${largePath})` }
+
+    await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
+
+    expect(output.text).toBe(`[4k image](${fakeViewerUrl})`)
+    expect(output.text).not.toContain("data:")
   })
 
   it("falls back to viewer text link when file read fails but mediaServer is available", async () => {

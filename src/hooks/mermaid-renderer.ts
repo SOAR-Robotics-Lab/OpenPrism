@@ -7,7 +7,7 @@ export function createMermaidAfterHook(
   onImageProduced?: (sessionID: string, filePath: string) => void,
 ): NonNullable<Hooks["tool.execute.after"]> {
   return async (input, output) => {
-    if (input.tool === "plot_data" || input.tool === "render_mermaid") {
+    if (input.tool === "plot_data" || input.tool === "render_mermaid" || input.tool === "generate_image") {
       const toolFilePath = extractToolFilePath(output.output)
       if (toolFilePath) {
         output.metadata = {

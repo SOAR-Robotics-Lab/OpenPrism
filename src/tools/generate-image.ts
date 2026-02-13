@@ -1,11 +1,14 @@
 import { tool } from "@opencode-ai/plugin"
+import * as fs from "node:fs/promises"
+import * as path from "node:path"
+import type { AIGCProvider } from "../providers/types.js"
 import type { FileManager } from "../utils/file-manager.js"
 import type { AIGCOperation } from "../types.js"
 
-export function createGenerateImageTool(fileManager: FileManager) {
+export function createGenerateImageTool(fileManager: FileManager, provider: AIGCProvider | null) {
   return tool({
     description:
-      "Generate or edit images using AIGC capabilities via configured MCP servers (e.g., Nano Banana / Gemini). This tool serves as the Tier 3 drawing command for creative image generation, UI mockups, icon creation, and image editing. Note: An AIGC MCP server must be configured in opencode.json for this tool to function.",
+      "Generate or edit images via built-in AIGC providers (Gemini/OpenRouter). Supports prompt-based generation, image edits, and provider-specific model controls.",
     args: {
       operation: tool.schema
         .enum(["generate", "edit", "continue_editing", "restore"])
@@ -21,82 +24,150 @@ export function createGenerateImageTool(fileManager: FileManager) {
         .array(tool.schema.string())
         .optional()
         .describe("Paths to reference images for style guidance"),
+      model: tool.schema
+        .string()
+        .optional()
+        .describe("Provider model identifier (for example, gemini-2.5-flash-image)"),
+      aspectRatio: tool.schema
+        .string()
+        .optional()
+        .describe("Preferred aspect ratio, such as 1:1 or 16:9"),
+      resolution: tool.schema
+        .string()
+        .optional()
+        .describe("Preferred output resolution (for example 1K, 2K, 4K)"),
+      style: tool.schema
+        .string()
+        .optional()
+        .describe("Optional style hint passed to the provider"),
     },
     async execute(args, context) {
       const operation = args.operation as AIGCOperation
+
+      if (!provider) {
+        return [
+          "Error: No AIGC provider configured.",
+          "Set GEMINI_API_KEY or OPENROUTER_API_KEY, or configure config.aigcProvider explicitly.",
+        ].join("\n")
+      }
 
       if ((operation === "edit" || operation === "restore") && !args.sourcePath) {
         return `Error: '${operation}' operation requires a sourcePath argument.`
       }
 
-      const guidance = buildMCPGuidance(operation, args.prompt, args.sourcePath, args.referenceImages)
+      try {
+        const referenceImages = args.referenceImages?.length
+          ? await Promise.all(args.referenceImages.map((imagePath) => loadImageBuffer(imagePath, context.directory)))
+          : undefined
 
-      await fileManager.recordAsset(3, context.directory, args.prompt)
+        const baseOptions = {
+          prompt: args.prompt,
+          model: args.model,
+          aspectRatio: args.aspectRatio,
+          resolution: args.resolution,
+          style: args.style,
+          referenceImages,
+        }
 
-      return [
-        `AIGC ${operation} request prepared.`,
-        "",
-        "To execute this request, ensure an AIGC MCP server is configured in opencode.json:",
-        "",
-        "```json",
-        JSON.stringify(
-          {
-            mcp: {
-              "nano-banana": {
-                type: "local",
-                command: ["npx", "-y", "nano-banana-mcp"],
-                enabled: true,
-                environment: { GEMINI_API_KEY: "{env:GEMINI_API_KEY}" },
-              },
-            },
-          },
-          null,
-          2,
-        ),
-        "```",
-        "",
-        "Then use the corresponding MCP tool directly:",
-        guidance,
-      ].join("\n")
+        let result
+
+        if (operation === "generate") {
+          result = await provider.generate(baseOptions)
+        } else if (operation === "continue_editing") {
+          if (provider.edit) {
+            const sourceImage = await resolveContinueEditingSource(
+              args.sourcePath,
+              args.referenceImages,
+              context.directory,
+            )
+
+            if (sourceImage) {
+              result = await provider.edit({
+                ...baseOptions,
+                sourceImage,
+                instruction: args.prompt,
+              })
+            } else {
+              result = await provider.generate(baseOptions)
+            }
+          } else {
+            result = await provider.generate(baseOptions)
+          }
+        } else {
+          if (!provider.edit) {
+            return `Error: Provider '${provider.name}' does not support '${operation}' operations.`
+          }
+
+          const sourceImage = await loadImageBuffer(args.sourcePath!, context.directory)
+          const instruction = operation === "restore" ? `Restore and enhance: ${args.prompt}` : args.prompt
+
+          result = await provider.edit({
+            ...baseOptions,
+            sourceImage,
+            instruction,
+          })
+        }
+
+        const ext = extFromMime(result.mimeType)
+        const outputPath = await fileManager.outputPath(3, "aigc", ext)
+        await fs.writeFile(outputPath, result.imageData)
+
+        const record = await fileManager.recordAsset(3, outputPath, args.prompt)
+
+        context.metadata({
+          title: args.prompt,
+          metadata: { filePath: outputPath },
+        })
+
+        const model = args.model ?? provider.models[0] ?? "unknown"
+        const format = ext.replace(/^\./, "")
+
+        return [
+          "AIGC image generated successfully.",
+          `File: ${outputPath}`,
+          `Format: ${format} | Size: ${record.size} bytes | Provider: ${provider.name} | Model: ${model}`,
+        ].join("\n")
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        return `Error generating image: ${message}`
+      }
     },
   })
 }
 
-function buildMCPGuidance(
-  operation: AIGCOperation,
-  prompt: string,
-  sourcePath?: string,
-  referenceImages?: string[],
-): string {
-  switch (operation) {
-    case "generate":
-      return `Call MCP tool "generate_image" with prompt: "${prompt}"`
-    case "edit":
-      return [
-        `Call MCP tool "edit_image" with:`,
-        `  imagePath: "${sourcePath}"`,
-        `  prompt: "${prompt}"`,
-        referenceImages?.length
-          ? `  referenceImages: ${JSON.stringify(referenceImages)}`
-          : "",
-      ]
-        .filter(Boolean)
-        .join("\n")
-    case "continue_editing":
-      return [
-        `Call MCP tool "continue_editing" with:`,
-        `  prompt: "${prompt}"`,
-        referenceImages?.length
-          ? `  referenceImages: ${JSON.stringify(referenceImages)}`
-          : "",
-      ]
-        .filter(Boolean)
-        .join("\n")
-    case "restore":
-      return [
-        `Call MCP tool "edit_image" with restoration prompt:`,
-        `  imagePath: "${sourcePath}"`,
-        `  prompt: "Restore and enhance: ${prompt}"`,
-      ].join("\n")
+async function resolveContinueEditingSource(
+  sourcePath: string | undefined,
+  referenceImages: string[] | undefined,
+  projectDir: string,
+): Promise<Buffer | undefined> {
+  if (sourcePath) {
+    return loadImageBuffer(sourcePath, projectDir)
+  }
+
+  const firstReference = referenceImages?.[0]
+  if (!firstReference) {
+    return undefined
+  }
+
+  return loadImageBuffer(firstReference, projectDir)
+}
+
+async function loadImageBuffer(imagePath: string, projectDir: string): Promise<Buffer> {
+  const absolutePath = path.isAbsolute(imagePath) ? imagePath : path.resolve(projectDir, imagePath)
+  return fs.readFile(absolutePath)
+}
+
+function extFromMime(mimeType: string): string {
+  switch (mimeType.toLowerCase()) {
+    case "image/png":
+      return ".png"
+    case "image/jpeg":
+      return ".jpg"
+    case "image/webp":
+      return ".webp"
+    case "image/gif":
+      return ".gif"
+    default:
+      return ".png"
   }
 }

@@ -1,3 +1,5 @@
+import type { AIGCProviderConfig } from "./providers/types.js"
+
 /**
  * OpenPrism — Shared type definitions for the multi-tier drawing plugin.
  */
@@ -132,6 +134,14 @@ export interface AIGCRenderOptions {
   sourcePath?: string
   /** Paths to reference images for style guidance. */
   referenceImages?: string[]
+  /** Provider-specific model identifier. */
+  model?: string
+  /** Preferred aspect ratio (for example, "1:1" or "16:9"). */
+  aspectRatio?: string
+  /** Preferred output resolution (for example, "1K", "2K", "4K"). */
+  resolution?: string
+  /** Optional style hint passed to the AIGC provider. */
+  style?: string
 }
 
 /** Result of an AIGC generation. */
@@ -199,6 +209,8 @@ export interface OpenPrismConfig {
   plotlyEnabled: boolean
   /** Whether Tier 3 (AIGC) is enabled. Defaults to true. */
   aigcEnabled: boolean
+  /** AIGC provider configuration. Auto-detects from env vars if not set. */
+  aigcProvider?: AIGCProviderConfig
   /** Maximum directory size in MB before auto-cleanup triggers. Defaults to 500. */
   maxOutputSizeMB: number
   /** Number of days after which old assets are cleaned up. Defaults to 30. */

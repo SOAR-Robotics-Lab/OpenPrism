@@ -11,6 +11,7 @@ import {
   createInlineImageTextCompleteHook,
   inlineLocalImageMarkdown,
 } from "../src/hooks/text-complete-inline-image.ts"
+import { createStripImagesTransformHook } from "../src/hooks/strip-images-transform.ts"
 
 // ---------------------------------------------------------------------------
 // createSystemPromptHook
@@ -288,6 +289,14 @@ describe("createInlineImageTextCompleteHook", () => {
   let tempRoot: string
   const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47])
   const DATA_URI = `data:image/png;base64,${PNG_BYTES.toString("base64")}`
+  const VALID_PNG_BYTES = Buffer.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+    0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xde, 0x00, 0x00, 0x00,
+    0x0c, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0x00,
+    0x00, 0x03, 0x01, 0x01, 0x00, 0xc9, 0xfe, 0x92, 0xef, 0x00, 0x00, 0x00,
+    0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+  ])
 
   beforeEach(async () => {
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "openprism-hooks-text-complete-"))
@@ -469,18 +478,20 @@ describe("createInlineImageTextCompleteHook", () => {
     expect(output.text).toContain("🖼 tiny")
   })
 
-  it("uses viewer URL when mediaServer is available", async () => {
+  it("uses viewer URL fallback when mediaServer is available but thumbnail fails", async () => {
     const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
     await fs.mkdir(outputDir, { recursive: true })
 
     const imagePath = path.join(outputDir, "plot.png")
-    await fs.writeFile(imagePath, PNG_BYTES)
+    await fs.writeFile(imagePath, PNG_BYTES) // invalid PNG — thumbnail generation fails
 
     const fakeViewerUrl = "http://127.0.0.1:12345/view/fake-id"
+    const fakeRawUrl = "http://127.0.0.1:12345/api/media/fake-id"
     const fakeMediaServer = {
       ensureStarted: async () => {},
       registerMedia: () => {},
       viewUrl: () => fakeViewerUrl,
+      mediaUrl: () => fakeRawUrl,
     } as unknown as import("../src/utils/media-server.ts").MediaServer
 
     const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots", {
@@ -490,9 +501,10 @@ describe("createInlineImageTextCompleteHook", () => {
 
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
-    expect(output.text).not.toContain("data:")
+    // Thumbnail fails (invalid PNG) → fallback to text link with viewer URL
     expect(output.text).toContain("🖼 chart")
     expect(output.text).toContain(fakeViewerUrl)
+    expect(output.text).not.toContain(fakeRawUrl) // rawUrl no longer used
   })
 
   it("falls back to source path when no mediaServer", async () => {
@@ -508,5 +520,123 @@ describe("createInlineImageTextCompleteHook", () => {
     await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
 
     expect(output.text).toBe(`[🖼 chart](${imagePath})`)
+  })
+
+  it("embeds base64 thumbnail when image is valid and mediaServer is available", async () => {
+    const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
+    await fs.mkdir(outputDir, { recursive: true })
+
+    const imagePath = path.join(outputDir, "plot.png")
+    await fs.writeFile(imagePath, VALID_PNG_BYTES)
+
+    const fakeViewerUrl = "http://127.0.0.1:12345/view/fake-id"
+    const fakeRawUrl = "http://127.0.0.1:12345/api/media/fake-id"
+    const fakeMediaServer = {
+      ensureStarted: async () => {},
+      registerMedia: () => {},
+      viewUrl: () => fakeViewerUrl,
+      mediaUrl: () => fakeRawUrl,
+    } as unknown as import("../src/utils/media-server.ts").MediaServer
+
+    const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots", {
+      mediaServer: fakeMediaServer,
+    })
+    const output = { text: `![chart](${imagePath})` }
+
+    await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
+
+    expect(output.text).toContain("![chart](data:image/webp;base64,")
+    expect(output.text).toContain(fakeViewerUrl)
+    expect(output.text).not.toContain(fakeRawUrl)
+  })
+
+  it("embeds base64 thumbnail without viewer link when no mediaServer", async () => {
+    const outputDir = path.join(tempRoot, ".opencode", "plots", "matplotlib")
+    await fs.mkdir(outputDir, { recursive: true })
+
+    const imagePath = path.join(outputDir, "plot.png")
+    await fs.writeFile(imagePath, VALID_PNG_BYTES)
+
+    const hook = createInlineImageTextCompleteHook(tempRoot, ".opencode/plots")
+    const output = { text: `![chart](${imagePath})` }
+
+    await hook({ sessionID: "s1", messageID: "m1", partID: "p1" }, output)
+
+    expect(output.text).toContain("![chart](data:image/webp;base64,")
+    expect(output.text).not.toContain("🔍")
+    expect(output.text).not.toContain("http://")
+  })
+})
+
+// ---------------------------------------------------------------------------
+// createStripImagesTransformHook
+// ---------------------------------------------------------------------------
+
+describe("createStripImagesTransformHook", () => {
+  const stubInput = {} as Parameters<ReturnType<typeof createStripImagesTransformHook>>[0]
+
+  type StripOutput = Parameters<ReturnType<typeof createStripImagesTransformHook>>[1]
+
+  function makeOutput(messages: { parts: { type: string; text: string }[] }[]): StripOutput {
+    return { messages } as unknown as StripOutput
+  }
+
+  function partText(output: StripOutput, msgIdx: number, partIdx: number): string {
+    return (output.messages[msgIdx]!.parts[partIdx] as unknown as { text: string }).text
+  }
+
+  it("strips data URI images from message text parts", async () => {
+    const hook = createStripImagesTransformHook()
+    const output = makeOutput([
+      {
+        parts: [
+          { type: "text", text: "Here is the chart:\n![chart](data:image/webp;base64,UklGR...)\n[🔍 chart](http://127.0.0.1:9999/view/abc)" },
+        ],
+      },
+    ])
+
+    await hook(stubInput, output)
+
+    expect(partText(output, 0, 0)).toBe("Here is the chart:\n[🖼 chart]\n[🔍 chart](http://127.0.0.1:9999/view/abc)")
+  })
+
+  it("leaves non-image text parts unchanged", async () => {
+    const hook = createStripImagesTransformHook()
+    const original = "Normal text without any images."
+    const output = makeOutput([{ parts: [{ type: "text", text: original }] }])
+
+    await hook(stubInput, output)
+
+    expect(partText(output, 0, 0)).toBe(original)
+  })
+
+  it("strips multiple data URI images in one part", async () => {
+    const hook = createStripImagesTransformHook()
+    const output = makeOutput([
+      {
+        parts: [
+          { type: "text", text: "![a](data:image/png;base64,ABC) and ![b](data:image/webp;base64,DEF)" },
+        ],
+      },
+    ])
+
+    await hook(stubInput, output)
+
+    expect(partText(output, 0, 0)).toBe("[🖼 a] and [🖼 b]")
+  })
+
+  it("skips non-text parts", async () => {
+    const hook = createStripImagesTransformHook()
+    const output = makeOutput([
+      {
+        parts: [
+          { type: "tool-invocation", text: "![x](data:image/png;base64,NOPE)" },
+        ],
+      },
+    ])
+
+    await hook(stubInput, output)
+
+    expect(partText(output, 0, 0)).toBe("![x](data:image/png;base64,NOPE)")
   })
 })

@@ -39,12 +39,14 @@ describe("OpenPrismPlugin", () => {
     expect(toolNames).toHaveLength(5)
   })
 
-  it("returns all 3 lifecycle hooks", async () => {
+  it("returns all 5 lifecycle hooks", async () => {
     const result = await OpenPrismPlugin(makePluginInput(tempRoot))
 
     expect(typeof result["tool.execute.after"]).toBe("function")
     expect(typeof result["experimental.chat.system.transform"]).toBe("function")
     expect(typeof result["experimental.session.compacting"]).toBe("function")
+    expect(typeof result["experimental.text.complete"]).toBe("function")
+    expect(typeof result["experimental.chat.messages.transform"]).toBe("function")
   })
 
   it("creates the output directory on initialization", async () => {

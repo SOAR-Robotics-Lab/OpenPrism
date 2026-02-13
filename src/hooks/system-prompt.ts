@@ -68,8 +68,12 @@ export function createSystemPromptHook(
       sections.push(
         "### Tier 3: AIGC Image Generation",
         "Use for UI mockups, icons, creative assets, and image editing.",
-        "- Tool: `generate_image` — prepares AIGC requests via configured MCP servers",
-        "- Requires a configured AIGC MCP server (e.g., nano-banana-mcp).",
+        "- Tool: `generate_image` — generates/edits images via built-in AIGC providers",
+        "- Supports multiple providers: Gemini (Google), OpenRouter (Seedream, etc.)",
+        "- Configure by setting environment variables: `GEMINI_API_KEY` or `OPENROUTER_API_KEY`",
+        "- Gemini models: `gemini-2.5-flash-image` (fast, 1K), `gemini-3-pro-image-preview` (high quality, up to 4K)",
+        "- OpenRouter models: `bytedance-seed/seedream-4.5` and others",
+        "- Optional parameters: `model`, `aspectRatio` (e.g. '16:9'), `resolution` ('1K'/'2K'/'4K' for Gemini Pro)",
         "- Prefer AIGC when the user needs visual design assets, UI prototypes, or image manipulation.",
         "",
       )

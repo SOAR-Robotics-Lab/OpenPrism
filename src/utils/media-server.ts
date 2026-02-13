@@ -76,6 +76,10 @@ export class MediaServer {
     return `${this.getBaseUrl()}/view/${encodeURIComponent(mediaId)}`
   }
 
+  mediaUrl(mediaId: string): string {
+    return `${this.getBaseUrl()}/api/media/${encodeURIComponent(mediaId)}`
+  }
+
   registerMedia(item: {
     id: string
     kind: MediaKind
